@@ -5,6 +5,27 @@ import type { ProductCardData } from "@/components/product-card";
 
 export type RatingMap = Map<number, { avg: number; count: number }>;
 
+// Lazily ensure the schema exists and the catalogue is seeded on first use.
+// This guarantees a freshly deployed, empty database is populated without
+// relying on a manual seed step (or on the instrumentation hook timing).
+let bootstrapPromise: Promise<void> | null = null;
+
+function ensureSeeded(): Promise<void> {
+  if (!bootstrapPromise) {
+    bootstrapPromise = (async () => {
+      try {
+        const { bootstrapIfNeeded } = await import("@/lib/seed-db");
+        await bootstrapIfNeeded(db);
+      } catch (err) {
+        // Allow a later request to retry if this attempt failed.
+        bootstrapPromise = null;
+        console.error("[queries] bootstrap failed:", err);
+      }
+    })();
+  }
+  return bootstrapPromise;
+}
+
 async function getRatingMap(): Promise<RatingMap> {
   const rows = await db
     .select({
@@ -57,6 +78,7 @@ export async function getProducts(
   filters: ProductFilters = {},
 ): Promise<ProductCardData[]> {
   try {
+    await ensureSeeded();
     const conditions = [eq(products.active, true)];
     if (filters.category) conditions.push(eq(products.category, filters.category));
     if (filters.collection)
@@ -121,6 +143,7 @@ export async function getFeaturedProducts(
   limit = 8,
 ): Promise<ProductCardData[]> {
   try {
+    await ensureSeeded();
     const rows = await db
       .select()
       .from(products)
@@ -136,6 +159,7 @@ export async function getFeaturedProducts(
 
 export async function getNewProducts(limit = 4): Promise<ProductCardData[]> {
   try {
+    await ensureSeeded();
     const rows = await db
       .select()
       .from(products)
@@ -161,6 +185,7 @@ export async function getProductBySlug(
   slug: string,
 ): Promise<ProductDetail | null> {
   try {
+    await ensureSeeded();
     const [product] = await db
       .select()
       .from(products)
@@ -208,6 +233,7 @@ export async function getProductBySlug(
 
 export async function getAllSlugs(): Promise<string[]> {
   try {
+    await ensureSeeded();
     const rows = await db.select({ slug: products.slug }).from(products);
     return rows.map((r) => r.slug);
   } catch {
