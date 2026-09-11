@@ -126,6 +126,52 @@ const FOREIGN_KEYS: { name: string; statement: string }[] = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// Storefront CMS tables (Phase 2). These are ensured on EVERY bootstrap —
+// including databases created before Phase 2 — because ensureSchema()'s fast
+// path returns early once the original catalogue tables exist. All statements
+// are IF NOT EXISTS, so this is a safe, idempotent, non-destructive additive
+// change (no ALTERs on existing tables, no data touched).
+// ---------------------------------------------------------------------------
+const CMS_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS "cms_blocks" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "type" text NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL,
+    "enabled" boolean DEFAULT true NOT NULL,
+    "starts_at" timestamp,
+    "ends_at" timestamp,
+    "data" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL,
+    "updated_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "cms_blocks_type_position_idx" ON "cms_blocks" ("type", "position")`,
+  `CREATE TABLE IF NOT EXISTS "media_files" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "original_name" text NOT NULL,
+    "mime_type" text NOT NULL,
+    "kind" text NOT NULL,
+    "size" integer DEFAULT 0 NOT NULL,
+    "data" bytea NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "media_files_kind_idx" ON "media_files" ("kind")`,
+];
+
+export async function ensureCmsSchema(db: SeedDb): Promise<void> {
+  for (const statement of CMS_SCHEMA_STATEMENTS) {
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (err) {
+      // Concurrent instances may race on CREATE INDEX; treat "already exists"
+      // as success (42P07 duplicate_table / 42P16 duplicate_object).
+      const e = err as { code?: string; cause?: { code?: string } };
+      const code = e.code ?? e.cause?.code;
+      if (code !== "42P07" && code !== "42P16") throw err;
+    }
+  }
+}
+
 export async function ensureSchema(db: SeedDb): Promise<void> {
   // Fast path: if the products table already exists, assume the schema is in
   // place and skip the DDL (avoids ~10 round-trips on every cold start).
@@ -371,6 +417,7 @@ export async function seedAdminData(
 // ---------------------------------------------------------------------------
 export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureSchema(db);
+  await ensureCmsSchema(db);
 
   // Top the catalogue up to the full seed set (handles empty databases and
   // partial ones left by earlier concurrent/aborted seeding attempts).

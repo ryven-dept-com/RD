@@ -24,7 +24,11 @@ export default async function SettingsPage() {
           address: settings.address ?? "",
           freeShippingThreshold: settings.freeShippingThreshold ?? "",
           currency: settings.currency ?? "دج",
-          announcement: settings.announcement ?? "",
+          seoTitle: settings.seoTitle ?? "",
+          seoDescription: settings.seoDescription ?? "",
+          logoUrl: settings.logoUrl ?? "",
+          faviconUrl: settings.faviconUrl ?? "",
+          ogImageUrl: settings.ogImageUrl ?? "",
         }}
       />
     </div>

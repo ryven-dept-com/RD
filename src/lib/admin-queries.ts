@@ -91,6 +91,19 @@ export async function getAllCategories() {
   return db.select().from(categories).orderBy(categories.name);
 }
 
+/** Lightweight product list for CMS pickers (id / name / first image). */
+export async function getProductOptions() {
+  const rows = await db
+    .select({
+      id: products.id,
+      name: products.name,
+      images: products.images,
+    })
+    .from(products)
+    .orderBy(products.name);
+  return rows.map((p) => ({ id: p.id, name: p.name, image: p.images[0] ?? "" }));
+}
+
 export async function getAllDeliveryZones() {
   return db.select().from(deliveryZones).orderBy(deliveryZones.code);
 }

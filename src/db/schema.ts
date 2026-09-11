@@ -1,12 +1,20 @@
 import {
+  boolean,
+  customType,
+  index,
   integer,
   jsonb,
   pgTable,
   serial,
   text,
   timestamp,
-  boolean,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer; notNull: true; default: never }>({
+  dataType() {
+    return "bytea";
+  },
+});
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
@@ -108,6 +116,61 @@ export const settings = pgTable("settings", {
   value: text("value").notNull().default(""),
 });
 
+// ---------------- STOREFRONT CMS (Phase 2) --------------------------------
+// Block-based content store. Singleton sections (hero, brand story,
+// announcement, newsletter, footer) use a single row; list sections
+// (collections, featured products, new arrivals, promo banners) use one row
+// per item ordered by `position`, with optional starts_at/ends_at scheduling.
+
+export const cmsBlocks = pgTable(
+  "cms_blocks",
+  {
+    id: serial("id").primaryKey(),
+    type: text("type").notNull(),
+    position: integer("position").notNull().default(0),
+    enabled: boolean("enabled").notNull().default(true),
+    startsAt: timestamp("starts_at"),
+    endsAt: timestamp("ends_at"),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("cms_blocks_type_position_idx").on(t.type, t.position)],
+);
+
+export const CMS_BLOCK_TYPES = [
+  "hero",
+  "collection",
+  "featured",
+  "new_arrival",
+  "brand_story",
+  "promo",
+  "announcement",
+  "newsletter",
+  "footer",
+] as const;
+
+export type CmsBlockType = (typeof CMS_BLOCK_TYPES)[number];
+
+// Uploaded media (images / video / audio). Files are stored as BYTEA so they
+// persist in the same production database as everything else — the project
+// has no external object-storage service configured. Strict size limits are
+// enforced at upload time (see /api/admin/media).
+
+export const mediaFiles = pgTable(
+  "media_files",
+  {
+    id: serial("id").primaryKey(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    kind: text("kind").notNull(), // image | video | audio
+    size: integer("size").notNull().default(0),
+    data: bytea("data").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("media_files_kind_idx").on(t.kind)],
+);
+
 export type OrderItem = {
   productId: number;
   slug: string;
@@ -126,6 +189,8 @@ export type AdminUser = typeof adminUsers.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type DeliveryZone = typeof deliveryZones.$inferSelect;
 export type Setting = typeof settings.$inferSelect;
+export type CmsBlock = typeof cmsBlocks.$inferSelect;
+export type MediaFile = typeof mediaFiles.$inferSelect;
 
 export const ORDER_STATUSES = [
   "جديد",

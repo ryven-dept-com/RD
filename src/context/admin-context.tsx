@@ -19,7 +19,14 @@ export function AdminProvider({
   const adminFetch = (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers);
     headers.set("x-csrf-token", csrfToken);
-    if (options.body && !headers.has("Content-Type")) {
+    // Let the browser set the multipart boundary for FormData uploads — only
+    // default to JSON for plain bodies.
+    const isBinaryBody =
+      typeof FormData !== "undefined" &&
+      (options.body instanceof FormData ||
+        options.body instanceof Blob ||
+        options.body instanceof ArrayBuffer);
+    if (options.body && !isBinaryBody && !headers.has("Content-Type")) {
       headers.set("Content-Type", "application/json");
     }
     return fetch(url, { ...options, headers });

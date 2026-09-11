@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { products, reviews, type Product, type Review } from "@/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { ProductCardData } from "@/components/product-card";
 
 export type RatingMap = Map<number, { avg: number; count: number }>;
@@ -169,6 +169,32 @@ export async function getNewProducts(limit = 4): Promise<ProductCardData[]> {
     return rows.map((p) => toCardData(p, ratingMap.get(p.id)));
   } catch (err) {
     console.error("getNewProducts failed:", err);
+    return [];
+  }
+}
+
+/**
+ * Resolve an ordered list of product ids (from the storefront CMS) to card
+ * data. Inactive products are skipped; the requested order is preserved.
+ */
+export async function getProductsByIds(
+  ids: number[],
+): Promise<ProductCardData[]> {
+  try {
+    if (!ids.length) return [];
+    await ensureSeeded();
+    const rows = await db
+      .select()
+      .from(products)
+      .where(and(inArray(products.id, ids), eq(products.active, true)));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    const ordered = ids
+      .map((id) => byId.get(id))
+      .filter((p): p is Product => Boolean(p));
+    const ratingMap = await getRatingMap();
+    return ordered.map((p) => toCardData(p, ratingMap.get(p.id)));
+  } catch (err) {
+    console.error("getProductsByIds failed:", err);
     return [];
   }
 }

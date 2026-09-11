@@ -1,42 +1,27 @@
 import Link from "next/link";
+import type { FooterContent, NewsletterContent } from "@/lib/cms";
 
-const COLS = [
-  {
-    title: "Shop",
-    links: [
-      { label: "New Arrivals", href: "/shop?filter=new" },
-      { label: "Best Sellers", href: "/shop?filter=best" },
-      { label: "Hoodies", href: "/shop?category=Hoodies" },
-      { label: "Jackets", href: "/shop?category=Jackets" },
-      { label: "Footwear", href: "/shop?category=Footwear" },
-    ],
-  },
-  {
-    title: "Collections",
-    links: [
-      { label: "Vault 01", href: "/shop?collection=Vault+01" },
-      { label: "Static", href: "/shop?collection=Static" },
-      { label: "Terrain", href: "/shop?collection=Terrain" },
-      { label: "Relay", href: "/shop?collection=Relay" },
-      { label: "Apex", href: "/shop?collection=Apex" },
-    ],
-  },
-  {
-    title: "Support",
-    links: [
-      { label: "Shipping & Returns", href: "/shop" },
-      { label: "Size Guide", href: "/shop" },
-      { label: "Track Order", href: "/shop" },
-      { label: "Contact", href: "/shop" },
-    ],
-  },
-];
+export type FooterProps = {
+  content: FooterContent;
+  newsletter: NewsletterContent;
+  contact: { email: string; phone: string; address: string };
+};
 
-export function Footer() {
+export function Footer({ content, newsletter, contact }: FooterProps) {
+  const hasContact =
+    content.showContact &&
+    Boolean(contact.email || contact.phone || contact.address);
+
   return (
     <footer className="bg-ink text-bone">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
+        <div
+          className={`grid gap-12 ${
+            content.linkGroups.length === 3
+              ? "lg:grid-cols-[1.5fr_1fr_1fr_1fr]"
+              : "lg:grid-cols-[1.5fr_repeat(auto-fit,1fr)]"
+          }`}
+        >
           <div>
             <div className="flex items-baseline gap-1.5">
               <span className="font-display text-2xl">RUVEN</span>
@@ -45,25 +30,57 @@ export function Footer() {
               </span>
             </div>
             <p className="mt-4 max-w-xs text-sm leading-relaxed text-bone/50">
-              Heavyweight essentials and utility outerwear, built for the street
-              and everything past it. Designed in-house, made to outlast trends.
+              {content.description}
             </p>
-            <form className="mt-6 flex max-w-sm items-center gap-2">
-              <input
-                type="email"
-                placeholder="Email for 10% off"
-                className="w-full rounded-full border border-bone/20 bg-transparent px-4 py-2.5 text-sm placeholder:text-bone/40 focus:border-bone/60 focus:outline-none"
-              />
-              <button
-                type="submit"
-                className="shrink-0 rounded-full bg-bone px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
-              >
-                Join
-              </button>
-            </form>
+            {hasContact && (
+              <ul className="mt-4 space-y-1.5 text-sm text-bone/50">
+                {contact.email && (
+                  <li>
+                    <a
+                      href={`mailto:${contact.email}`}
+                      className="transition-colors hover:text-bone"
+                    >
+                      {contact.email}
+                    </a>
+                  </li>
+                )}
+                {contact.phone && (
+                  <li dir="ltr" className="text-left">
+                    <a
+                      href={`tel:${contact.phone.replace(/\s+/g, "")}`}
+                      className="transition-colors hover:text-bone"
+                    >
+                      {contact.phone}
+                    </a>
+                  </li>
+                )}
+                {contact.address && <li>{contact.address}</li>}
+              </ul>
+            )}
+            {newsletter.enabled && (
+              <form className="mt-6 flex max-w-sm items-center gap-2">
+                <input
+                  type="email"
+                  placeholder={newsletter.title || "Email address"}
+                  aria-label={newsletter.title || "Email address"}
+                  className="w-full rounded-full border border-bone/20 bg-transparent px-4 py-2.5 text-sm placeholder:text-bone/40 focus:border-bone/60 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  className="shrink-0 rounded-full bg-bone px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
+                >
+                  {newsletter.buttonText || "Join"}
+                </button>
+              </form>
+            )}
+            {newsletter.enabled && newsletter.description && (
+              <p className="mt-2 max-w-sm text-xs text-bone/40">
+                {newsletter.description}
+              </p>
+            )}
           </div>
 
-          {COLS.map((col) => (
+          {content.linkGroups.map((col) => (
             <div key={col.title}>
               <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-bone/40">
                 {col.title}
@@ -85,8 +102,21 @@ export function Footer() {
         </div>
 
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-bone/10 pt-8 text-xs text-bone/40 sm:flex-row">
-          <p>© {new Date().getFullYear()} Ruven Dept. All rights reserved.</p>
+          <p>
+            © {new Date().getFullYear()} {content.copyright}
+          </p>
           <div className="flex items-center gap-6">
+            {content.socialLinks.map((s) => (
+              <a
+                key={s.label}
+                href={s.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors hover:text-bone"
+              >
+                {s.label}
+              </a>
+            ))}
             <span>Privacy</span>
             <span>Terms</span>
             <span>Accessibility</span>

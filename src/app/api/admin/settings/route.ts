@@ -12,7 +12,14 @@ const ALLOWED_KEYS = [
   "address",
   "freeShippingThreshold",
   "currency",
-  "announcement",
+  // SEO & branding (Phase 2 CMS). The storefront announcement moved to the
+  // Content → Announcement CMS block, so the legacy `announcement` settings
+  // key is intentionally no longer editable here (single source of truth).
+  "seoTitle",
+  "seoDescription",
+  "logoUrl",
+  "faviconUrl",
+  "ogImageUrl",
 ];
 
 export async function PUT(request: Request) {
