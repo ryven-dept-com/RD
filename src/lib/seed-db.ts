@@ -332,6 +332,16 @@ export async function seedAdminData(
 // on every server start.
 // ---------------------------------------------------------------------------
 export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
+  // Fast path: if the catalogue already has rows, assume the database is
+  // migrated + seeded and do nothing. Keeps the steady-state cost on each
+  // cold start to a single cheap query.
+  try {
+    const existing = await db.$count(products);
+    if (existing > 0) return;
+  } catch {
+    // products table likely missing — fall through to create the schema.
+  }
+
   await ensureSchema(db);
 
   const productCount = await db.$count(products);
