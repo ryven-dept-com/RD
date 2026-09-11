@@ -127,6 +127,16 @@ const FOREIGN_KEYS: { name: string; statement: string }[] = [
 ];
 
 export async function ensureSchema(db: SeedDb): Promise<void> {
+  // Fast path: if the products table already exists, assume the schema is in
+  // place and skip the DDL (avoids ~10 round-trips on every cold start).
+  const check = await db.execute(
+    sql.raw(`SELECT to_regclass('public.products') IS NOT NULL AS exists`),
+  );
+  const alreadyExists = Boolean(
+    (check.rows as { exists: boolean }[])[0]?.exists,
+  );
+  if (alreadyExists) return;
+
   for (const statement of SCHEMA_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }
@@ -137,48 +147,76 @@ export async function ensureSchema(db: SeedDb): Promise<void> {
       ),
     );
     if (existing.rows.length === 0) {
-      await db.execute(sql.raw(fk.statement));
+      try {
+        await db.execute(sql.raw(fk.statement));
+      } catch (err) {
+        // Another instance may have created the constraint concurrently.
+        // drizzle wraps the driver error, so the SQLSTATE lives on `cause`.
+        const e = err as { code?: string; cause?: { code?: string } };
+        const code = e.code ?? e.cause?.code;
+        if (code !== "42P07" && code !== "42710") throw err;
+      }
     }
   }
 }
 
 // ---------------------------------------------------------------------------
-// Seeding (products + reviews). Matches the original src/db/seed.ts behaviour.
+// Seeding (products + reviews).
+// - clear: true (default, used by the CLI script) wipes the catalogue first,
+//   matching the original src/db/seed.ts behaviour.
+// - clear: false (used by the startup bootstrap) is non-destructive and race
+//   safe: products are upserted with ON CONFLICT DO NOTHING, so concurrent
+//   instances converge on the full catalogue without deleting each other.
 // ---------------------------------------------------------------------------
-export async function seedCatalogue(db: SeedDb): Promise<void> {
-  console.log("Clearing existing catalogue...");
-  await db.delete(reviews);
-  await db.delete(orders);
-  await db.delete(products);
+export async function seedCatalogue(
+  db: SeedDb,
+  opts: { clear?: boolean } = {},
+): Promise<void> {
+  const clear = opts.clear ?? true;
+
+  if (clear) {
+    console.log("Clearing existing catalogue...");
+    await db.delete(reviews);
+    await db.delete(orders);
+    await db.delete(products);
+  }
 
   console.log(`Seeding ${seedProducts.length} products...`);
   for (const p of seedProducts) {
-    const [inserted] = await db
-      .insert(products)
-      .values({
-        slug: p.slug,
-        name: p.name,
-        tagline: p.tagline,
-        description: p.description,
-        price: p.price,
-        compareAtPrice: p.compareAtPrice ?? null,
-        category: p.category,
-        collection: p.collection,
-        images: p.images,
-        sizes: p.sizes,
-        colors: p.colors,
-        details: p.details,
-        featured: p.featured ?? false,
-        isNew: p.isNew ?? false,
-        bestSeller: p.bestSeller ?? false,
-        stock: p.stock ?? 60,
-      })
-      .returning();
+    const values = {
+      slug: p.slug,
+      name: p.name,
+      tagline: p.tagline,
+      description: p.description,
+      price: p.price,
+      compareAtPrice: p.compareAtPrice ?? null,
+      category: p.category,
+      collection: p.collection,
+      images: p.images,
+      sizes: p.sizes,
+      colors: p.colors,
+      details: p.details,
+      featured: p.featured ?? false,
+      isNew: p.isNew ?? false,
+      bestSeller: p.bestSeller ?? false,
+      stock: p.stock ?? 60,
+    };
 
-    if (p.reviews.length) {
+    const inserted = clear
+      ? await db.insert(products).values(values).returning()
+      : await db
+          .insert(products)
+          .values(values)
+          .onConflictDoNothing({ target: products.slug })
+          .returning();
+
+    // In non-destructive mode, onConflictDoNothing returns no rows for
+    // products that already exist, so reviews are only added once per product.
+    const newId = inserted[0]?.id;
+    if (p.reviews.length && newId != null) {
       await db.insert(reviews).values(
         p.reviews.map((r) => ({
-          productId: inserted.id,
+          productId: newId,
           author: r.author,
           rating: r.rating,
           title: r.title,
@@ -332,22 +370,16 @@ export async function seedAdminData(
 // on every server start.
 // ---------------------------------------------------------------------------
 export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
-  // Fast path: if the catalogue already has rows, assume the database is
-  // migrated + seeded and do nothing. Keeps the steady-state cost on each
-  // cold start to a single cheap query.
-  try {
-    const existing = await db.$count(products);
-    if (existing > 0) return;
-  } catch {
-    // products table likely missing — fall through to create the schema.
-  }
-
   await ensureSchema(db);
 
+  // Top the catalogue up to the full seed set (handles empty databases and
+  // partial ones left by earlier concurrent/aborted seeding attempts).
   const productCount = await db.$count(products);
-  if (productCount === 0) {
-    console.log("[bootstrap] products table is empty — seeding catalogue...");
-    await seedCatalogue(db);
+  if (productCount < seedProducts.length) {
+    console.log(
+      `[bootstrap] catalogue incomplete (${productCount}/${seedProducts.length}) — seeding...`,
+    );
+    await seedCatalogue(db, { clear: false });
   }
 
   const adminCount = await db.$count(adminUsers);
