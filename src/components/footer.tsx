@@ -5,9 +5,13 @@ export type FooterProps = {
   content: FooterContent;
   newsletter: NewsletterContent;
   contact: { email: string; phone: string; address: string };
+  /** Admin → Settings → Store name; used when no custom copyright is set. */
+  storeName?: string;
 };
 
-export function Footer({ content, newsletter, contact }: FooterProps) {
+export function Footer({ content, newsletter, contact, storeName }: FooterProps) {
+  const copyright =
+    content.copyright || `${storeName || "RUVEN DEPT"}. All rights reserved.`;
   const hasContact =
     content.showContact &&
     Boolean(contact.email || contact.phone || contact.address);
@@ -103,7 +107,7 @@ export function Footer({ content, newsletter, contact }: FooterProps) {
 
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-bone/10 pt-8 text-xs text-bone/40 sm:flex-row">
           <p>
-            © {new Date().getFullYear()} {content.copyright}
+            © {new Date().getFullYear()} {copyright}
           </p>
           <div className="flex items-center gap-6">
             {content.socialLinks.map((s) => (

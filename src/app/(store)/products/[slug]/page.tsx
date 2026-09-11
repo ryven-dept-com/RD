@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductBySlug } from "@/lib/queries";
-import { formatPrice, formatDate } from "@/lib/format";
+import { formatDate, formatPriceWithSymbol } from "@/lib/format";
+import { getStoreSettings } from "@/lib/settings";
 import { ProductCard } from "@/components/product-card";
 import { StarRating } from "@/components/star-rating";
 import { CheckIcon, RefreshIcon, TruckIcon } from "@/components/icons";
@@ -36,8 +37,14 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const detail = await getProductBySlug(slug);
+  const [detail, store] = await Promise.all([
+    getProductBySlug(slug),
+    getStoreSettings().catch(() => null),
+  ]);
   if (!detail) notFound();
+
+  const formatPrice = (cents: number) =>
+    formatPriceWithSymbol(cents, store?.currency ?? "");
 
   const { product, reviews, avgRating, reviewCount, related } = detail;
   const onSale =

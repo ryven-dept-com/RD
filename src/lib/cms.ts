@@ -185,7 +185,8 @@ export const DEFAULT_FOOTER: FooterContent = {
   description:
     "Heavyweight essentials and utility outerwear, built for the street and everything past it. Designed in-house, made to outlast trends.",
   showContact: false,
-  copyright: "Ruven Dept. All rights reserved.",
+  // Empty = fall back to the admin-configured store name in the footer.
+  copyright: "",
   socialLinks: [],
   linkGroups: [
     {

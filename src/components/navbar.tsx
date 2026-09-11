@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCart } from "@/context/cart-context";
+import { useStoreConfig } from "@/context/store-context";
 import { BagIcon, CloseIcon, MenuIcon } from "./icons";
 
 const LINKS = [
@@ -16,6 +17,7 @@ const LINKS = [
 
 export function Navbar() {
   const { count, openCart } = useCart();
+  const { logoUrl, storeName } = useStoreConfig();
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -63,12 +65,23 @@ export function Navbar() {
           </button>
 
           <Link href="/" className="flex items-baseline gap-1.5">
-            <span className="font-display text-xl tracking-tight sm:text-2xl">
-              RUVEN
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-[0.25em] opacity-70">
-              Dept.
-            </span>
+            {logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoUrl}
+                alt={storeName}
+                className="h-7 w-auto object-contain sm:h-8"
+              />
+            ) : (
+              <>
+                <span className="font-display text-xl tracking-tight sm:text-2xl">
+                  RUVEN
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-[0.25em] opacity-70">
+                  Dept.
+                </span>
+              </>
+            )}
           </Link>
 
           <ul className="hidden items-center gap-6 text-[13px] font-medium uppercase tracking-wide lg:flex">

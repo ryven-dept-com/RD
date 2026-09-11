@@ -2,10 +2,9 @@
 
 import Link from "next/link";
 import { lineKey, useCart } from "@/context/cart-context";
-import { formatPrice } from "@/lib/format";
+import { useStoreConfig } from "@/context/store-context";
 import { ArrowRightIcon, CloseIcon, MinusIcon, PlusIcon, TruckIcon } from "./icons";
 
-const FREE_SHIP_THRESHOLD = 15000; // $150
 
 export function CartDrawer() {
   const {
@@ -17,9 +16,10 @@ export function CartDrawer() {
     subtotal,
     count,
   } = useCart();
+  const { formatPrice, freeShippingThreshold } = useStoreConfig();
 
-  const remaining = Math.max(0, FREE_SHIP_THRESHOLD - subtotal);
-  const progress = Math.min(100, (subtotal / FREE_SHIP_THRESHOLD) * 100);
+  const remaining = Math.max(0, freeShippingThreshold - subtotal);
+  const progress = Math.min(100, (subtotal / freeShippingThreshold) * 100);
 
   return (
     <div

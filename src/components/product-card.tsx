@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import { formatPrice } from "@/lib/format";
+import { useStoreConfig } from "@/context/store-context";
 import { StarRating } from "./star-rating";
 
 export type ProductCardData = {
@@ -26,6 +28,7 @@ export function ProductCard({
   priority?: boolean;
   index?: number;
 }) {
+  const { formatPrice } = useStoreConfig();
   const onSale =
     product.compareAtPrice != null && product.compareAtPrice > product.price;
   const secondImage = product.images[1] ?? product.images[0];

@@ -5,7 +5,6 @@ import {
   deliveryZones,
   orders,
   products,
-  settings,
 } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 
@@ -108,12 +107,8 @@ export async function getAllDeliveryZones() {
   return db.select().from(deliveryZones).orderBy(deliveryZones.code);
 }
 
-export async function getSettingsMap(): Promise<Record<string, string>> {
-  const rows = await db.select().from(settings);
-  const map: Record<string, string> = {};
-  for (const r of rows) map[r.key] = r.value;
-  return map;
-}
+// Settings live in the central settings service (single source of truth).
+export { getSettingsMap } from "@/lib/settings";
 
 // ---------------- Customers (derived from real order data) -----------------
 

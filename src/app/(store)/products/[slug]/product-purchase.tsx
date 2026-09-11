@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCart } from "@/context/cart-context";
-import { formatPrice } from "@/lib/format";
+import { useStoreConfig } from "@/context/store-context";
+import { trackPixelEvent } from "@/components/meta-pixel";
 import { BagIcon, CheckIcon, MinusIcon, PlusIcon } from "@/components/icons";
 
 type PurchaseProps = {
@@ -18,6 +19,7 @@ type PurchaseProps = {
 
 export function ProductPurchase(props: PurchaseProps) {
   const { addItem } = useCart();
+  const { formatPrice, pixel } = useStoreConfig();
   const [color, setColor] = useState(props.colors[0] ?? "Default");
   const [size, setSize] = useState<string>(
     props.sizes.length === 1 ? props.sizes[0] : "",
@@ -25,6 +27,19 @@ export function ProductPurchase(props: PurchaseProps) {
   const [qty, setQty] = useState(1);
   const [error, setError] = useState(false);
   const [added, setAdded] = useState(false);
+
+  // ViewContent standard event for Meta Pixel.
+  useEffect(() => {
+    if (pixel.enabled && pixel.events.viewContent) {
+      trackPixelEvent("ViewContent", {
+        content_ids: [props.slug],
+        content_type: "product",
+        value: props.price / 100,
+      });
+    }
+    // Fire once per product page visit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAdd = () => {
     if (!size) {
@@ -42,6 +57,14 @@ export function ProductPurchase(props: PurchaseProps) {
       quantity: qty,
       maxStock: props.stock,
     });
+    if (pixel.enabled && pixel.events.addToCart) {
+      trackPixelEvent("AddToCart", {
+        content_ids: [props.slug],
+        content_type: "product",
+        value: (props.price * qty) / 100,
+        num_items: qty,
+      });
+    }
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);
   };

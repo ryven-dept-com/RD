@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Anton, Inter } from "next/font/google";
+import { getStoreSettings } from "@/lib/settings";
 import "./globals.css";
 
 const inter = Inter({
@@ -17,53 +18,54 @@ const anton = Anton({
 });
 
 const DEFAULT_SITE_TITLE = "Ruven Dept.";
-const DEFAULT_TITLE =
-  "Ruven Dept. — Heavyweight Streetwear Essentials";
 const DEFAULT_DESCRIPTION =
   "Ruven Dept. crafts heavyweight streetwear essentials and utility outerwear built for the street and everything past it. Free shipping over $150.";
 
 /**
- * SEO / branding metadata is CMS-managed via the settings table (Admin →
- * Settings → SEO & Branding), with the original values as fallback so the
+ * SEO / branding metadata is managed via Admin → Settings (SEO section) and
+ * stored in the settings table, with the original values as fallback so the
  * site always has valid metadata.
  */
 export async function generateMetadata(): Promise<Metadata> {
-  let seo = {
-    seoTitle: "",
-    seoDescription: "",
-    faviconUrl: "",
-    ogImageUrl: "",
-  };
+  let store: Awaited<ReturnType<typeof getStoreSettings>> | null = null;
   try {
-    const { getSeoSettings } = await import("@/lib/cms");
-    seo = await getSeoSettings();
+    store = await getStoreSettings();
   } catch {
     // metadata falls back to defaults
   }
 
-  const siteTitle = seo.seoTitle.trim() || DEFAULT_SITE_TITLE;
-  const description = seo.seoDescription.trim() || DEFAULT_DESCRIPTION;
+  const storeName = store?.storeName || DEFAULT_SITE_TITLE;
+  const siteTitle = store?.seoTitle || `${storeName} — Heavyweight Streetwear Essentials`;
+  const description = store?.seoDescription || DEFAULT_DESCRIPTION;
+  const indexable = store ? store.robotsIndex : true;
 
   return {
     title: {
-      default: seo.seoTitle.trim() || DEFAULT_TITLE,
-      template: `%s · ${siteTitle}`,
+      default: siteTitle,
+      template: `%s · ${store?.seoTitle || storeName}`,
     },
     description,
-    keywords: [
-      "streetwear",
-      "hoodies",
-      "heavyweight tees",
-      "utility jackets",
-      "cargo pants",
-      "sneakers",
-    ],
-    ...(seo.faviconUrl ? { icons: { icon: seo.faviconUrl } } : {}),
+    keywords: store?.seoKeywords
+      ? store.seoKeywords
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean)
+      : [
+          "streetwear",
+          "hoodies",
+          "heavyweight tees",
+          "utility jackets",
+          "cargo pants",
+          "sneakers",
+        ],
+    robots: { index: indexable, follow: indexable },
+    ...(store?.canonicalUrl ? { alternates: { canonical: store.canonicalUrl } } : {}),
+    ...(store?.faviconUrl ? { icons: { icon: store.faviconUrl } } : {}),
     openGraph: {
-      title: seo.seoTitle.trim() || DEFAULT_TITLE,
+      title: siteTitle,
       description,
       type: "website",
-      ...(seo.ogImageUrl ? { images: [{ url: seo.ogImageUrl }] } : {}),
+      ...(store?.ogImageUrl ? { images: [{ url: store.ogImageUrl }] } : {}),
     },
   };
 }

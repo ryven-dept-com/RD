@@ -316,6 +316,32 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   freeShippingThreshold: "15000",
   currency: "دج",
   announcement: "Free shipping over $150",
+  // --- Phase 3 (professional settings). Additive only: existing databases
+  // keep their stored values; missing rows fall back to these defaults at
+  // read time via src/lib/settings.ts anyway.
+  checkoutEnabled: "true",
+  codEnabled: "true",
+  minOrderAmount: "0",
+  requirePhone: "false",
+  requireAddress: "true",
+  seoTitle: "",
+  seoDescription: "",
+  seoKeywords: "",
+  canonicalUrl: "",
+  robotsIndex: "true",
+  logoUrl: "",
+  faviconUrl: "",
+  ogImageUrl: "",
+  instagramUrl: "",
+  tiktokUrl: "",
+  facebookUrl: "",
+  metaPixelId: "",
+  metaPixelEnabled: "false",
+  pixelEventPageView: "true",
+  pixelEventViewContent: "true",
+  pixelEventAddToCart: "true",
+  pixelEventInitiateCheckout: "true",
+  pixelEventPurchase: "true",
 };
 
 export async function seedAdminData(

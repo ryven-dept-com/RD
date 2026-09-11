@@ -1,27 +1,22 @@
-import { db } from "@/db";
-import { settings } from "@/db/schema";
-import { sql } from "drizzle-orm";
+import { applySettingsPatch } from "@/lib/settings";
 import { verifyRequest } from "@/lib/admin-auth";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_KEYS = [
-  "storeName",
-  "contactEmail",
-  "contactPhone",
-  "address",
-  "freeShippingThreshold",
-  "currency",
-  // SEO & branding (Phase 2 CMS). The storefront announcement moved to the
-  // Content → Announcement CMS block, so the legacy `announcement` settings
-  // key is intentionally no longer editable here (single source of truth).
-  "seoTitle",
-  "seoDescription",
-  "logoUrl",
-  "faviconUrl",
-  "ogImageUrl",
-];
-
+/**
+ * Save a settings patch (Phase 3).
+ *
+ * IMPORTANT semantics fix: only keys present in the request body are
+ * validated and written. Keys that are absent are left untouched — the
+ * Phase 2 implementation looped over a fixed key list and wrote an empty
+ * string for every key missing from the payload, which silently wiped
+ * stored settings whenever a partial/stale payload arrived. That was the
+ * root cause of "saved settings not persisting".
+ *
+ * The response includes the authoritative settings map as stored in the
+ * database so the client can re-sync its form state from the source of
+ * truth after saving.
+ */
 export async function PUT(request: Request) {
   const admin = await verifyRequest(request);
   if (!admin) {
@@ -30,17 +25,22 @@ export async function PUT(request: Request) {
 
   try {
     const body = await request.json();
-    for (const key of ALLOWED_KEYS) {
-      const value = String(body[key] ?? "").slice(0, 500);
-      await db
-        .insert(settings)
-        .values({ key, value })
-        .onConflictDoUpdate({
-          target: settings.key,
-          set: { value: sql`excluded.value` },
-        });
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return Response.json(
+        { ok: false, error: "Invalid request body" },
+        { status: 400 },
+      );
     }
-    return Response.json({ ok: true });
+
+    const result = await applySettingsPatch(body as Record<string, unknown>);
+    if (!result.ok) {
+      return Response.json(
+        { ok: false, errors: result.errors },
+        { status: 400 },
+      );
+    }
+
+    return Response.json({ ok: true, settings: result.saved });
   } catch (err) {
     console.error("PUT /api/admin/settings failed:", err);
     return Response.json({ ok: false, error: "Server error" }, { status: 500 });
