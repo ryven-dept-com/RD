@@ -27,9 +27,14 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  useEffect(() => {
+  // Close the mobile menu on navigation. Adjusting state during render (the
+  // React-recommended pattern) avoids an extra committed render that a
+  // useEffect-based reset would cause.
+  const [lastPathname, setLastPathname] = useState(pathname);
+  if (lastPathname !== pathname) {
+    setLastPathname(pathname);
     setMobileOpen(false);
-  }, [pathname]);
+  }
 
   const onHome = pathname === "/";
   // transparent over hero only at top of home page

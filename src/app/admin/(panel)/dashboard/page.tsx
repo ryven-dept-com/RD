@@ -12,14 +12,43 @@ export default async function DashboardPage() {
     getRecentOrders(6),
   ]);
 
-  const cards = [
-    { label: "Total Products", value: stats.totalProducts, tone: "bg-slate-900 text-white" },
-    { label: "Total Orders", value: stats.totalOrders, tone: "bg-white" },
-    { label: "New Orders — جديد", value: stats.statusCounts["جديد"], tone: "bg-white" },
-    { label: "Confirmed — تم التأكيد", value: stats.statusCounts["تم التأكيد"], tone: "bg-white" },
-    { label: "Shipped — تم الشحن", value: stats.statusCounts["تم الشحن"], tone: "bg-white" },
-    { label: "Delivered — تم التسليم", value: stats.statusCounts["تم التسليم"], tone: "bg-white" },
-    { label: "Cancelled — ملغى", value: stats.statusCounts["ملغى"], tone: "bg-white" },
+  const totals = [
+    { label: "Total Orders", value: stats.totalOrders, href: "/admin/orders" },
+    { label: "Total Products", value: stats.totalProducts, href: "/admin/products" },
+    {
+      label: "Total Categories",
+      value: stats.totalCategories,
+      href: "/admin/categories",
+    },
+  ];
+
+  const statusCards = [
+    { label: "New — جديد", value: stats.statusCounts["جديد"], href: "/admin/orders" },
+    {
+      label: "Confirmed — تم التأكيد",
+      value: stats.statusCounts["تم التأكيد"],
+      href: "/admin/orders",
+    },
+    {
+      label: "Preparing — قيد التحضير",
+      value: stats.statusCounts["قيد التحضير"],
+      href: "/admin/orders",
+    },
+    {
+      label: "Shipped — تم الشحن",
+      value: stats.statusCounts["تم الشحن"],
+      href: "/admin/orders",
+    },
+    {
+      label: "Delivered — تم التسليم",
+      value: stats.statusCounts["تم التسليم"],
+      href: "/admin/orders",
+    },
+    {
+      label: "Cancelled — ملغى",
+      value: stats.statusCounts["ملغى"],
+      href: "/admin/orders",
+    },
   ];
 
   return (
@@ -31,8 +60,8 @@ export default async function DashboardPage() {
         </p>
       </div>
 
-      {/* total sales highlight */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* headline metrics */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-white shadow-sm lg:col-span-2">
           <p className="text-sm font-medium text-emerald-50">Total Sales</p>
           <p className="mt-2 text-3xl font-bold">{formatDZD(stats.totalSales)}</p>
@@ -40,15 +69,29 @@ export default async function DashboardPage() {
             Excludes cancelled orders
           </p>
         </div>
-        {cards.slice(0, 2).map((c) => (
+        {totals.map((c) => (
           <StatCard key={c.label} {...c} />
         ))}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {cards.slice(2).map((c) => (
-          <StatCard key={c.label} {...c} />
-        ))}
+      {/* orders by status */}
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            Orders by status
+          </h2>
+          <Link
+            href="/admin/analytics"
+            className="text-sm font-medium text-slate-600 hover:text-slate-900"
+          >
+            Analytics →
+          </Link>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          {statusCards.map((c) => (
+            <StatCard key={c.label} {...c} />
+          ))}
+        </div>
       </div>
 
       {/* recent orders */}
@@ -122,19 +165,21 @@ export default async function DashboardPage() {
 function StatCard({
   label,
   value,
-  tone,
+  href,
 }: {
   label: string;
   value: number;
-  tone: string;
+  href: string;
 }) {
-  const dark = tone.includes("text-white");
   return (
-    <div className={`rounded-2xl border border-slate-200 p-5 shadow-sm ${tone}`}>
-      <p className={`text-sm font-medium ${dark ? "text-slate-300" : "text-slate-500"}`}>
-        {label}
+    <Link
+      href={href}
+      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-colors hover:border-slate-300"
+    >
+      <p className="text-sm font-medium text-slate-500">{label}</p>
+      <p className="mt-2 text-3xl font-bold tabular-nums text-slate-900">
+        {value}
       </p>
-      <p className="mt-2 text-3xl font-bold tabular-nums">{value}</p>
-    </div>
+    </Link>
   );
 }

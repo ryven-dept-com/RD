@@ -24,6 +24,7 @@ export type CartItem = {
 
 type CartState = {
   items: CartItem[];
+  hydrated: boolean;
 };
 
 type CartAction =
@@ -42,12 +43,13 @@ export function lineKey(item: Pick<CartItem, "productId" | "size" | "color">) {
 function reducer(state: CartState, action: CartAction): CartState {
   switch (action.type) {
     case "HYDRATE":
-      return { items: action.items };
+      return { ...state, items: action.items, hydrated: true };
     case "ADD": {
       const key = lineKey(action.item);
       const existing = state.items.find((i) => lineKey(i) === key);
       if (existing) {
         return {
+          ...state,
           items: state.items.map((i) =>
             lineKey(i) === key
               ? {
@@ -61,12 +63,13 @@ function reducer(state: CartState, action: CartAction): CartState {
           ),
         };
       }
-      return { items: [...state.items, action.item] };
+      return { ...state, items: [...state.items, action.item] };
     }
     case "REMOVE":
-      return { items: state.items.filter((i) => lineKey(i) !== action.key) };
+      return { ...state, items: state.items.filter((i) => lineKey(i) !== action.key) };
     case "SET_QTY":
       return {
+        ...state,
         items: state.items.map((i) =>
           lineKey(i) === action.key
             ? { ...i, quantity: Math.max(1, Math.min(action.quantity, i.maxStock)) }
@@ -74,7 +77,7 @@ function reducer(state: CartState, action: CartAction): CartState {
         ),
       };
     case "CLEAR":
-      return { items: [] };
+      return { ...state, items: [] };
     default:
       return state;
   }
@@ -96,31 +99,34 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null);
 
 export function CartProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, { items: [] });
+  const [state, dispatch] = useReducer(reducer, { items: [], hydrated: false });
   const [isOpen, setIsOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    let items: CartItem[] = [];
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as CartItem[];
-        if (Array.isArray(parsed)) dispatch({ type: "HYDRATE", items: parsed });
+        if (Array.isArray(parsed)) items = parsed;
       }
     } catch {
       // ignore
     }
-    setHydrated(true);
+    // Dispatching once (instead of setState) keeps the hydration flag inside
+    // the reducer, so persistence stays gated until after the stored cart is
+    // reflected in state.
+    dispatch({ type: "HYDRATE", items });
   }, []);
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!state.hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
     } catch {
       // ignore
     }
-  }, [state.items, hydrated]);
+  }, [state.items, state.hydrated]);
 
   useEffect(() => {
     document.body.style.overflow = isOpen ? "hidden" : "";
