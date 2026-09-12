@@ -12,6 +12,10 @@ import {
   restoreOrderStockOnce,
   shouldRestoreStock,
 } from "@/lib/order-admin";
+import {
+  isKnownDeliveryStatus,
+  isValidDeliveryTransition,
+} from "@/lib/delivery-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -95,7 +99,7 @@ export async function PATCH(
 
     const updates: Partial<typeof orders.$inferInsert> = { updatedAt: new Date() };
     const events: Array<{
-      kind: "status" | "payment";
+      kind: "status" | "payment" | "delivery";
       fromValue: string;
       toValue: string;
     }> = [];
@@ -138,6 +142,39 @@ export async function PATCH(
           kind: "payment",
           fromValue: existing.paymentStatus,
           toValue: payment,
+        });
+      }
+    }
+
+    // ---- delivery status (Phase 8) ----
+    // Complements the order status: it tracks the PHYSICAL parcel
+    // lifecycle. Same rules as the fulfillment status — validated
+    // transitions, 409 unless explicitly forced.
+    if (body.deliveryStatus !== undefined) {
+      const delivery = String(body.deliveryStatus ?? "");
+      if (!isKnownDeliveryStatus(delivery)) {
+        return Response.json(
+          { ok: false, error: "Invalid delivery status" },
+          { status: 400 },
+        );
+      }
+      if (delivery !== existing.deliveryStatus) {
+        const force = body.force === true;
+        if (!force && !isValidDeliveryTransition(existing.deliveryStatus, delivery)) {
+          return Response.json(
+            {
+              ok: false,
+              error: `Cannot move delivery from "${existing.deliveryStatus}" to "${delivery}"`,
+              code: "INVALID_DELIVERY_TRANSITION",
+            },
+            { status: 409 },
+          );
+        }
+        updates.deliveryStatus = delivery;
+        events.push({
+          kind: "delivery",
+          fromValue: existing.deliveryStatus,
+          toValue: delivery,
         });
       }
     }

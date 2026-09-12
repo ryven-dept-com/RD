@@ -5,6 +5,8 @@ import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/db/schema";
 import {
+  DELIVERY_STATUS_LABELS,
+  DELIVERY_STATUS_STYLES,
   formatDZD,
   formatDateTime,
   PAYMENT_STATUS_STYLES,
@@ -21,6 +23,9 @@ type Row = {
   currency: string;
   status: string;
   paymentStatus: string;
+  deliveryMethod: string;
+  deliveryStatus: string;
+  deliveryZoneCode: number;
   itemCount: number;
   stockRestored: boolean;
   createdAt: string;
@@ -203,6 +208,15 @@ export function OrdersTable({
                       }`}
                     >
                       {o.paymentStatus.replace("_", " ")}
+                    </span>
+                    <span
+                      className={`mt-1 block w-fit rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                        DELIVERY_STATUS_STYLES[o.deliveryStatus] ??
+                        "bg-slate-100 text-slate-600"
+                      }`}
+                      title={`Delivery: ${o.deliveryMethod}`}
+                    >
+                      {DELIVERY_STATUS_LABELS[o.deliveryStatus] ?? o.deliveryStatus}
                     </span>
                   </td>
                   <td className="px-4 py-3">

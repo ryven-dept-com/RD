@@ -2,7 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getOrderDetailAdmin } from "@/lib/order-admin";
 import { ORDER_TRANSITIONS } from "@/lib/order-admin";
-import { formatDZD, formatDateTime } from "@/lib/admin-format";
+import { DELIVERY_TRANSITIONS } from "@/lib/delivery-admin";
+import type { DeliveryStatus } from "@/db/schema";
+import {
+  formatDZD,
+  formatDateTime,
+  SHIPPING_METHOD_LABELS,
+} from "@/lib/admin-format";
 import { OrderActions } from "./order-actions";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +43,14 @@ export default async function OrderViewPage({
     ["Commune", order.commune || "—"],
     ["Postal code", order.postalCode || "—"],
     ["Country", order.country || "—"],
+    // Phase 8: immutable shipping snapshot (as chosen at checkout).
+    [
+      "Shipping method",
+      order.deliveryMethod
+        ? (SHIPPING_METHOD_LABELS[order.deliveryMethod] ?? order.deliveryMethod)
+        : "Home Delivery",
+    ],
+    ["Estimated delivery", order.deliveryEstimate || "—"],
   ];
 
   return (
@@ -156,6 +170,16 @@ export default async function OrderViewPage({
                     {formatDZD(deliveryFee)}
                   </dd>
                 </div>
+                {order.deliveryZoneCode > 0 && (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">
+                      Zone code
+                    </dt>
+                    <dd className="tabular-nums text-slate-800">
+                      {order.deliveryZoneCode}
+                    </dd>
+                  </div>
+                )}
               </dl>
             </div>
           </div>
@@ -168,6 +192,10 @@ export default async function OrderViewPage({
           paymentStatus={order.paymentStatus}
           stockRestored={order.stockRestored}
           validNext={[...(ORDER_TRANSITIONS[order.status] ?? [])]}
+          deliveryStatus={order.deliveryStatus}
+          validDeliveryNext={[
+            ...(DELIVERY_TRANSITIONS[order.deliveryStatus as DeliveryStatus] ?? []),
+          ]}
           notes={notes.map((n) => ({
             id: n.id,
             author: n.author,

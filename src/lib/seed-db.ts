@@ -297,6 +297,71 @@ export async function ensureOrderSchema(db: SeedDb): Promise<void> {
   }
 }
 
+// ---------------- Phase 8: delivery & shipping schema ----------------------
+// Additive, idempotent upgrade of delivery_zones (home/pickup methods per
+// zone + metadata) and orders (immutable shipping snapshot + delivery
+// status). All new columns have safe defaults, so existing zones and orders
+// keep working unchanged.
+
+const DELIVERY_SCHEMA_STATEMENTS = [
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "slug" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "city" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "home_enabled" boolean DEFAULT true NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "home_price" integer DEFAULT 0 NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "home_estimated_time" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "pickup_enabled" boolean DEFAULT false NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "pickup_price" integer DEFAULT 0 NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "pickup_estimated_time" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "notes" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "sort_order" integer DEFAULT 0 NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "created_at" timestamp DEFAULT now() NOT NULL`,
+  `ALTER TABLE "delivery_zones" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now() NOT NULL`,
+  `CREATE INDEX IF NOT EXISTS "delivery_zones_enabled_sort_idx" ON "delivery_zones" ("enabled", "sort_order", "code")`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "delivery_method" text DEFAULT 'home' NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "delivery_zone_code" integer DEFAULT 0 NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "delivery_estimate" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "delivery_status" text DEFAULT 'not_ready' NOT NULL`,
+];
+
+/**
+ * Phase 8: additive, idempotent delivery schema upgrade + one-shot backfill.
+ *
+ * The backfill runs EXACTLY ONCE per database (gated by a settings flag):
+ * it copies the legacy single price/estimate into the home-delivery method
+ * columns, derives a slug and sort order from the wilaya code, and leaves
+ * pickup disabled until an admin configures it. Existing orders are never
+ * touched — their shipping snapshots stay exactly as written.
+ */
+export async function ensureDeliverySchema(db: SeedDb): Promise<void> {
+  for (const statement of DELIVERY_SCHEMA_STATEMENTS) {
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (err) {
+      if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
+    }
+  }
+
+  const BACKFILL_FLAG = "delivery.backfill.v1";
+  const inserted = await db.execute(
+    sql`INSERT INTO "settings" ("key", "value") VALUES (${BACKFILL_FLAG}, 'done')
+        ON CONFLICT ("key") DO NOTHING`,
+  );
+  const alreadyDone = inserted.rowCount === 0;
+  if (alreadyDone) return;
+
+  // Only touch rows that were never configured with Phase 8 fields — an
+  // admin-edited zone is never overwritten, even if this runs twice.
+  await db.execute(sql`
+    UPDATE "delivery_zones" SET
+      "home_price" = "price",
+      "home_estimated_time" = "estimated_time",
+      "slug" = 'wilaya-' || "code",
+      "sort_order" = "code"
+    WHERE "home_price" = 0 AND "home_estimated_time" = '' AND "slug" = ''
+  `);
+  console.log("[bootstrap] delivery zones backfilled with Phase 8 methods.");
+}
+
 const PRODUCT_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "product_variants" (
     "id" serial PRIMARY KEY NOT NULL,
@@ -619,8 +684,14 @@ export async function seedAdminData(
     const zone = {
       code,
       wilaya: `${code} - ${wilaya}`,
+      slug: `wilaya-${code}`,
       price,
       estimatedTime: "2-4 أيام",
+      // Phase 8: home delivery inherits the legacy price on fresh databases.
+      homeEnabled: true,
+      homePrice: price,
+      homeEstimatedTime: "2-4 أيام",
+      sortOrder: code,
       enabled: true,
     };
     if (reset) {
@@ -671,6 +742,7 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureProductSchema(db);
   await ensureCategorySchema(db);
   await ensureOrderSchema(db);
+  await ensureDeliverySchema(db);
 
   // Top the catalogue up to the full seed set (handles empty databases and
   // partial ones left by earlier concurrent/aborted seeding attempts).

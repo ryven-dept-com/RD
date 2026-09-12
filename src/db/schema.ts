@@ -84,6 +84,14 @@ export const orders = pgTable("orders", {
   currency: text("currency").notNull().default(""),
   /** Phase 7: true once a cancel/refund has restored stock (idempotency). */
   stockRestored: boolean("stock_restored").notNull().default(false),
+  /** Phase 8: immutable shipping snapshot — method chosen at checkout. */
+  deliveryMethod: text("delivery_method").notNull().default("home"),
+  /** Phase 8: wilaya code of the delivery zone used at checkout (0 = none). */
+  deliveryZoneCode: integer("delivery_zone_code").notNull().default(0),
+  /** Phase 8: estimated delivery time shown to the customer at checkout. */
+  deliveryEstimate: text("delivery_estimate").notNull().default(""),
+  /** Phase 8: physical parcel lifecycle (see DELIVERY_STATUSES). */
+  deliveryStatus: text("delivery_status").notNull().default("not_ready"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -186,10 +194,68 @@ export const deliveryZones = pgTable("delivery_zones", {
   id: serial("id").primaryKey(),
   code: integer("code").notNull().unique(), // wilaya number
   wilaya: text("wilaya").notNull(),
+  /** Phase 8: URL-safe identifier + optional city/commune coverage. */
+  slug: text("slug").notNull().default(""),
+  city: text("city").notNull().default(""),
+  /** Legacy single price — kept readable; Phase 8 uses home_price/pickup_price. */
   price: integer("price").notNull().default(0), // in DZD
   estimatedTime: text("estimated_time").notNull().default("2-4 أيام"),
+  /** Phase 8: home delivery method (per zone). */
+  homeEnabled: boolean("home_enabled").notNull().default(true),
+  homePrice: integer("home_price").notNull().default(0),
+  homeEstimatedTime: text("home_estimated_time").notNull().default(""),
+  /** Phase 8: pickup / office (stopdesk) method (per zone). */
+  pickupEnabled: boolean("pickup_enabled").notNull().default(false),
+  pickupPrice: integer("pickup_price").notNull().default(0),
+  pickupEstimatedTime: text("pickup_estimated_time").notNull().default(""),
+  /** Phase 8: internal admin notes for this zone. */
+  notes: text("notes").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
   enabled: boolean("enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * Phase 8: shipping methods. Availability, pricing and estimates are stored
+ * PER ZONE (the home_/pickup_ columns); this metadata describes the methods
+ * themselves. No external courier integrations — configuration only.
+ */
+export const SHIPPING_METHODS = ["home", "office"] as const;
+export type ShippingMethod = (typeof SHIPPING_METHODS)[number];
+
+export const SHIPPING_METHOD_INFO: Record<
+  ShippingMethod,
+  { name: string; description: string; sortOrder: number }
+> = {
+  home: {
+    name: "Home Delivery",
+    description: "Delivered to the customer's address.",
+    sortOrder: 1,
+  },
+  office: {
+    name: "Pickup / Office Delivery",
+    description: "Collected from a courier office / pickup point.",
+    sortOrder: 2,
+  },
+};
+
+/**
+ * Phase 8: delivery/shipping state — complements (never replaces) the
+ * Phase 7 order status and payment status:
+ *  - order status    = commercial lifecycle (new → confirmed → … → delivered)
+ *  - payment status  = money lifecycle (pending / paid / refunded …)
+ *  - delivery status = physical parcel lifecycle (prep → courier → transit)
+ */
+export const DELIVERY_STATUSES = [
+  "not_ready",
+  "ready",
+  "handed_to_courier",
+  "in_transit",
+  "delivered",
+  "returned",
+] as const;
+export type DeliveryStatus = (typeof DELIVERY_STATUSES)[number];
 
 export const settings = pgTable("settings", {
   key: text("key").primaryKey(),

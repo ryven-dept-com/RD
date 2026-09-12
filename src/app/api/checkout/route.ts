@@ -13,6 +13,11 @@ import {
   resolveVariantForCheckout,
   syncProductStockFlags,
 } from "@/lib/product-admin";
+import {
+  getZoneByCode,
+  isShippingMethod,
+  quoteShipping,
+} from "@/lib/delivery-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -218,7 +223,63 @@ export async function POST(request: Request) {
       sku: l.sku || undefined,
     }));
 
-    const shipping = subtotal >= freeShipThreshold ? 0 : SHIPPING_FLAT;
+    // ------------------------------------------------------------------
+    // Phase 8: server-authoritative shipping. When the client picks a
+    // delivery zone + method, the server re-resolves the zone, verifies it
+    // is active and the method is enabled, and computes the fee from the
+    // database (NEVER from client-provided prices). The Phase 3 free-
+    // shipping threshold still applies on top. Clients that send no zone
+    // keep the legacy flat rate so existing integrations stay compatible.
+    // ------------------------------------------------------------------
+    let shipping: number;
+    let deliveryMethod: "home" | "office" = "home";
+    let deliveryZoneCode = 0;
+    let deliveryZoneName = "";
+    let deliveryEstimate = "";
+
+    const zoneCodeRaw = body.deliveryZone;
+    if (zoneCodeRaw !== undefined && zoneCodeRaw !== null && zoneCodeRaw !== "") {
+      const zoneCode = Number(zoneCodeRaw);
+      if (!Number.isFinite(zoneCode) || zoneCode <= 0 || Math.floor(zoneCode) !== zoneCode) {
+        return Response.json(
+          { ok: false, error: "Invalid delivery zone" },
+          { status: 400 },
+        );
+      }
+      const methodRaw = String(body.deliveryMethod ?? "home");
+      if (!isShippingMethod(methodRaw)) {
+        return Response.json(
+          { ok: false, error: "Invalid shipping method" },
+          { status: 400 },
+        );
+      }
+      const zone = await getZoneByCode(zoneCode);
+      if (!zone || !zone.enabled) {
+        return Response.json(
+          { ok: false, error: "Delivery zone is not available", code: "ZONE_INACTIVE" },
+          { status: 404 },
+        );
+      }
+      const quote = quoteShipping(zone, methodRaw, subtotal, freeShipThreshold);
+      if (!quote) {
+        return Response.json(
+          {
+            ok: false,
+            error: "Shipping method is not available for this zone",
+            code: "METHOD_UNAVAILABLE",
+          },
+          { status: 409 },
+        );
+      }
+      shipping = quote.shipping;
+      deliveryMethod = methodRaw;
+      deliveryZoneCode = zone.code;
+      deliveryZoneName = zone.wilaya;
+      deliveryEstimate = quote.estimatedTime;
+    } else {
+      shipping = subtotal >= freeShipThreshold ? 0 : SHIPPING_FLAT;
+    }
+
     const total = subtotal + shipping;
     const orderNumber = `RVN-${Date.now().toString(36).toUpperCase()}${Math.floor(
       Math.random() * 900 + 100,
@@ -281,12 +342,20 @@ export async function POST(request: Request) {
           city: String(body.city ?? "").trim(),
           postalCode: String(body.postalCode ?? "").trim(),
           country: String(body.country ?? "").trim(),
+          // Phase 8: wilaya/commune captured for Algeria-first delivery.
+          wilaya: deliveryZoneName || String(body.wilaya ?? "").trim(),
+          commune: String(body.commune ?? "").trim(),
           subtotal,
           shipping,
           deliveryPrice: shipping,
           total,
           items: orderItems,
           status: "جديد",
+          // Phase 8: immutable shipping snapshot — zone/method/estimate as
+          // chosen at checkout; later zone price changes never touch this.
+          deliveryMethod,
+          deliveryZoneCode,
+          deliveryEstimate,
           // Phase 7 snapshots: payment is cash-on-delivery (the store's real
           // checkout method) and the currency is fixed at purchase time.
           paymentMethod: "cod",

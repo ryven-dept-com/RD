@@ -84,7 +84,7 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 /** Append an audit-trail entry (lightweight, production-safe). */
 export async function recordOrderEvent(params: {
   orderId: number;
-  kind: "status" | "payment" | "stock" | "note";
+  kind: "status" | "payment" | "stock" | "note" | "delivery";
   fromValue?: string;
   toValue?: string;
   actor?: string;
@@ -202,6 +202,10 @@ export type AdminOrderRow = {
   currency: string;
   status: string;
   paymentStatus: string;
+  /** Phase 8: shipping snapshot + parcel lifecycle. */
+  deliveryMethod: string;
+  deliveryStatus: string;
+  deliveryZoneCode: number;
   itemCount: number;
   stockRestored: boolean;
   createdAt: string;
@@ -297,6 +301,9 @@ export async function searchOrdersAdmin(
       currency: o.currency,
       status: o.status,
       paymentStatus: o.paymentStatus,
+      deliveryMethod: o.deliveryMethod,
+      deliveryStatus: o.deliveryStatus,
+      deliveryZoneCode: o.deliveryZoneCode,
       itemCount: o.items.reduce((sum, i) => sum + i.quantity, 0),
       stockRestored: o.stockRestored,
       createdAt: o.createdAt.toISOString(),

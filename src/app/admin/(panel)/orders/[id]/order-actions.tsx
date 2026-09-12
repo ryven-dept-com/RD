@@ -5,6 +5,8 @@ import { useState } from "react";
 import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/db/schema";
 import { useAdmin } from "@/context/admin-context";
 import {
+  DELIVERY_STATUS_LABELS,
+  DELIVERY_STATUS_STYLES,
   formatDateTime,
   PAYMENT_STATUS_STYLES,
   STATUS_STYLES,
@@ -33,6 +35,8 @@ export function OrderActions({
   paymentStatus,
   stockRestored,
   validNext,
+  deliveryStatus,
+  validDeliveryNext,
   notes,
   events,
 }: {
@@ -41,6 +45,8 @@ export function OrderActions({
   paymentStatus: string;
   stockRestored: boolean;
   validNext: string[];
+  deliveryStatus: string;
+  validDeliveryNext: string[];
   notes: NoteRow[];
   events: EventRow[];
 }) {
@@ -89,6 +95,16 @@ export function OrderActions({
       if (!confirm(`Move this order to "${next}"?${restoreInfo}`)) return;
     }
     void patch({ status: next }, `Status updated to "${next}".`);
+  };
+
+  const moveDelivery = (next: string) => {
+    if (next === "returned") {
+      if (!confirm("Mark this parcel as returned?")) return;
+    }
+    void patch(
+      { deliveryStatus: next },
+      `Delivery status updated to "${DELIVERY_STATUS_LABELS[next] ?? next}".`,
+    );
   };
 
   const applyOverride = () => {
@@ -248,6 +264,45 @@ export function OrderActions({
         </div>
       </div>
 
+      {/* delivery status (Phase 8) */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="font-semibold text-slate-900">Delivery</h2>
+          <span
+            className={`rounded px-2 py-1 text-xs font-semibold ${
+              DELIVERY_STATUS_STYLES[deliveryStatus] ?? "bg-slate-100 text-slate-600"
+            }`}
+          >
+            {DELIVERY_STATUS_LABELS[deliveryStatus] ?? deliveryStatus}
+          </span>
+        </div>
+        <p className="mb-3 text-xs text-slate-400">
+          Physical parcel lifecycle — independent of the order and payment
+          status.
+        </p>
+        <div className="grid grid-cols-1 gap-2">
+          {validDeliveryNext.map((s) => (
+            <button
+              key={s}
+              onClick={() => moveDelivery(s)}
+              disabled={busy}
+              className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 ${
+                s === "returned"
+                  ? "border-rose-200 text-rose-700 hover:bg-rose-50"
+                  : "border-slate-200 text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Mark as {DELIVERY_STATUS_LABELS[s] ?? s}
+            </button>
+          ))}
+          {validDeliveryNext.length === 0 && (
+            <p className="text-sm text-slate-400">
+              Terminal delivery state — no further transitions.
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* internal notes */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5">
         <h2 className="mb-4 font-semibold text-slate-900">Internal notes</h2>
@@ -302,7 +357,9 @@ export function OrderActions({
                         ? "bg-emerald-50 text-emerald-700"
                         : e.kind === "stock"
                           ? "bg-amber-50 text-amber-700"
-                          : "bg-slate-100 text-slate-600"
+                          : e.kind === "delivery"
+                            ? "bg-purple-50 text-purple-700"
+                            : "bg-slate-100 text-slate-600"
                   }`}
                 >
                   {e.kind}

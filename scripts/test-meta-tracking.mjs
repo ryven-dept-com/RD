@@ -1418,6 +1418,483 @@ async function main() {
     headers: adminHeaders,
   });
 
+  section("13) Phase 8 — professional delivery & shipping management");
+
+  // 13.0 Seeded zones migrated additively (58 wilayas, home method active).
+  const zoneList = await jfetch(`${BASE}/api/admin/delivery`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "seeded wilayas present with Phase 8 fields",
+    zoneList.ok === true &&
+      zoneList.zones.length >= 58 &&
+      zoneList.zones.every((z) => "homePrice" in z && "pickupEnabled" in z),
+    JSON.stringify({ count: zoneList.zones?.length }),
+  );
+  const algiers = zoneList.zones.find((z) => z.code === 16);
+  check(
+    "backfill copied legacy price into home delivery",
+    algiers?.homeEnabled === true &&
+      algiers?.homePrice === algiers?.price &&
+      algiers?.slug !== "" &&
+      algiers?.sortOrder === 16,
+    JSON.stringify(algiers),
+  );
+
+  // 13.1 Zone CRUD + validation + safe deletion.
+  const dupZone = await jfetch(`${BASE}/api/admin/delivery`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ code: 16, wilaya: "Duplicate", homeEnabled: true, homePrice: 100 }),
+  });
+  check("duplicate wilaya code rejected (409)", dupZone.status === 409);
+  const badCode = await jfetch(`${BASE}/api/admin/delivery`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ code: 99, wilaya: "Nowhere", homeEnabled: true, homePrice: 100 }),
+  });
+  check("out-of-range wilaya code rejected (400)", badCode.status === 400);
+  const noMethods = await jfetch(`${BASE}/api/admin/delivery`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ code: 15, wilaya: "X", homeEnabled: false, pickupEnabled: false }),
+  });
+  check("zone without any shipping method rejected (400)", noMethods.status === 400);
+  const orans = zoneList.zones.find((z) => z.code === 31);
+  const negPrice = await jfetch(`${BASE}/api/admin/delivery/${orans.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ wilaya: orans.wilaya, homeEnabled: true, homePrice: -50 }),
+  }).then((r) => r.json());
+  check(
+    "negative prices sanitized to zero",
+    negPrice.ok === true && negPrice.zone?.homePrice === 0,
+    JSON.stringify(negPrice.zone),
+  );
+
+  // Configure Algiers (16) deterministically for the checkout assertions.
+  const cfgRes = await jfetch(`${BASE}/api/admin/delivery/${algiers.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      wilaya: algiers.wilaya,
+      homeEnabled: true,
+      homePrice: 600,
+      homeEstimatedTime: "1-2 أيام",
+      pickupEnabled: true,
+      pickupPrice: 350,
+      pickupEstimatedTime: "1 يوم",
+    }),
+  }).then((r) => r.json());
+  check(
+    "zone configured with home + office pricing",
+    cfgRes.ok === true &&
+      cfgRes.zone.homePrice === 600 &&
+      cfgRes.zone.pickupPrice === 350 &&
+      cfgRes.zone.price === 600,
+    JSON.stringify(cfgRes.zone),
+  );
+
+  // Legacy inline-edit payload (pre-Phase 8 admin) still works.
+  const legacyPatch = await jfetch(`${BASE}/api/admin/delivery/${orans.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ price: 620, estimatedTime: "2-3 أيام", enabled: true }),
+  }).then((r) => r.json());
+  check(
+    "legacy PATCH payload maps onto home delivery",
+    legacyPatch.ok === true &&
+      legacyPatch.zone.homePrice === 620 &&
+      legacyPatch.zone.homeEstimatedTime === "2-3 أيام",
+  );
+
+  // Safe deletion: enabled → 409, disabled → deleted, then recreated.
+  const delActive = await jfetch(`${BASE}/api/admin/delivery/${algiers.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  check("deleting an ACTIVE zone is blocked (409)", delActive.status === 409);
+  await jfetch(`${BASE}/api/admin/delivery/${algiers.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ wilaya: algiers.wilaya, enabled: false, homeEnabled: true, homePrice: 600 }),
+  });
+  const delDisabled = await jfetch(`${BASE}/api/admin/delivery/${algiers.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  check("disabled zone can be deleted safely", delDisabled.status === 200);
+  const recreate = await jfetch(`${BASE}/api/admin/delivery`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      code: 16,
+      wilaya: algiers.wilaya,
+      homeEnabled: true,
+      homePrice: 600,
+      homeEstimatedTime: "1-2 أيام",
+      pickupEnabled: true,
+      pickupPrice: 350,
+      pickupEstimatedTime: "1 يوم",
+      sortOrder: 16,
+    }),
+  }).then((r) => r.json());
+  check("zone recreated with same wilaya code", recreate.ok === true && recreate.zone.code === 16);
+  const algiersId = recreate.zone.id;
+
+  // 13.2 Public endpoints: active zones only + server-computed quotes.
+  const publicZones = await jfetch(`${BASE}/api/delivery/zones`).then((r) => r.json());
+  const pubAlgiers = publicZones.zones?.find((z) => z.code === 16);
+  check(
+    "public zones expose per-method prices for active zones",
+    publicZones.ok === true &&
+      pubAlgiers?.methods.home?.price === 600 &&
+      pubAlgiers?.methods.office?.price === 350,
+    JSON.stringify(pubAlgiers),
+  );
+  const quoteHome = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=home&subtotal=5000`,
+  ).then((r) => r.json());
+  check(
+    "quote below threshold uses zone price",
+    quoteHome.ok === true && quoteHome.quote.shipping === 600 && !quoteHome.quote.freeShipping,
+  );
+  const quoteFree = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=15000`,
+  ).then((r) => r.json());
+  check(
+    "free-shipping threshold still applies at/above 15000",
+    quoteFree.ok === true &&
+      quoteFree.quote.shipping === 0 &&
+      quoteFree.quote.freeShipping === true,
+  );
+  const quoteBadMethod = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=drone&subtotal=1000`,
+  );
+  check("quote rejects unknown method (400)", quoteBadMethod.status === 400);
+  const quoteDisabledMethod = await jfetch(
+    `${BASE}/api/delivery/quote?zone=31&method=office&subtotal=1000`,
+  );
+  check(
+    "quote rejects method disabled for the zone (404)",
+    quoteDisabledMethod.status === 404,
+  );
+
+  // 13.3 Checkout integration (server-authoritative shipping).
+  const P8_SLUG = "phase8-delivery-hoodie";
+  const p8Create = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase8 Delivery Hoodie",
+      slug: P8_SLUG,
+      sku: "P8-HOODIE",
+      description: "Created by the Phase 8 integration suite.",
+      price: "80.00",
+      category: "Hoodies",
+      sizes: "M",
+      colors: "Onyx",
+      variants: [
+        { size: "M", color: "Onyx", sku: "P8-M-ONYX", stock: 15, active: true },
+      ],
+    }),
+  }).then((r) => r.json());
+  const p8Detail = await jfetch(`${BASE}/api/admin/products/${p8Create.id}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const p8Variant = p8Detail.variants.find((v) => v.size === "M");
+  const p8Customer = {
+    email: "phase8@test.local",
+    fullName: "Phase Eight Tester",
+    address: "8 Delivery Street",
+    city: "Alger",
+    postalCode: "16000",
+    country: "Algeria",
+    phone: "+213555000008",
+  };
+  const p8Item = {
+    slug: P8_SLUG,
+    size: "M",
+    color: "Onyx",
+    quantity: 1,
+    variantId: p8Variant.id,
+    sku: "P8-M-ONYX",
+  };
+
+  // Home delivery through zone 16.
+  const homeBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      commune: "Bab El Oued",
+      deliveryZone: 16,
+      deliveryMethod: "home",
+      // Manipulated client shipping — the server MUST ignore it.
+      shipping: 1,
+      deliveryPrice: 1,
+      items: [p8Item],
+    }),
+  }).then((r) => r.json());
+  check(
+    "checkout with home delivery succeeds",
+    homeBuy.ok === true && homeBuy.shipping === 600,
+    JSON.stringify(homeBuy),
+  );
+  check(
+    "client-manipulated shipping price ignored (server is source of truth)",
+    homeBuy.total === homeBuy.subtotal + 600,
+  );
+  const homeOrder = await jfetch(
+    `${BASE}/api/admin/orders?q=${encodeURIComponent(homeBuy.orderNumber)}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const homeOrderId = homeOrder.orders[0]?.id;
+  const homeDetail = await jfetch(`${BASE}/api/admin/orders/${homeOrderId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "order stores immutable shipping snapshot",
+    homeDetail.order.deliveryMethod === "home" &&
+      homeDetail.order.deliveryZoneCode === 16 &&
+      homeDetail.order.deliveryEstimate === "1-2 أيام" &&
+      homeDetail.order.wilaya.includes("الجزائر") &&
+      homeDetail.order.commune === "Bab El Oued" &&
+      homeDetail.order.shipping === 600,
+    JSON.stringify({
+      m: homeDetail.order.deliveryMethod,
+      z: homeDetail.order.deliveryZoneCode,
+      e: homeDetail.order.deliveryEstimate,
+    }),
+  );
+
+  // Changing the zone price later must NOT rewrite history.
+  await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ wilaya: algiers.wilaya, homePrice: 9999, homeEnabled: true }),
+  });
+  const homeDetailAfter = await jfetch(`${BASE}/api/admin/orders/${homeOrderId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "historical shipping snapshot unaffected by later price changes",
+    homeDetailAfter.order.shipping === 600 && homeDetailAfter.order.total === homeBuy.total,
+  );
+  // restore price for following assertions
+  await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ wilaya: algiers.wilaya, homePrice: 600, homeEnabled: true }),
+  });
+
+  // Office/pickup delivery.
+  const officeBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      deliveryZone: 16,
+      deliveryMethod: "office",
+      items: [p8Item],
+    }),
+  }).then((r) => r.json());
+  check(
+    "checkout with pickup/office delivery uses office price",
+    officeBuy.ok === true && officeBuy.shipping === 350,
+    JSON.stringify(officeBuy),
+  );
+
+  // Free shipping over the threshold (zone selected).
+  const bigItem = { ...p8Item, quantity: 10 }; // 10 × 8000 = 80000 ≥ 15000
+  const freeBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      deliveryZone: 16,
+      deliveryMethod: "home",
+      items: [bigItem],
+    }),
+  }).then((r) => r.json());
+  check(
+    "free shipping applies at/above threshold even with a zone",
+    freeBuy.ok === true && freeBuy.shipping === 0 && freeBuy.total === freeBuy.subtotal,
+  );
+
+  // Rejections: unavailable method, inactive zone, unknown zone.
+  const officeUnavailable = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      deliveryZone: 31,
+      deliveryMethod: "office",
+      items: [p8Item],
+    }),
+  });
+  check(
+    "checkout rejects method disabled for zone (409)",
+    officeUnavailable.status === 409,
+    String(officeUnavailable.status),
+  );
+  await jfetch(`${BASE}/api/admin/delivery/${orans.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ wilaya: orans.wilaya, enabled: false, homeEnabled: true }),
+  });
+  const inactiveZoneBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      deliveryZone: 31,
+      deliveryMethod: "home",
+      items: [p8Item],
+    }),
+  });
+  check("checkout rejects inactive zone (404)", inactiveZoneBuy.status === 404);
+  await jfetch(`${BASE}/api/admin/delivery/${orans.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ wilaya: orans.wilaya, enabled: true, homeEnabled: true }),
+  });
+  const unknownZoneBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      deliveryZone: 999,
+      deliveryMethod: "home",
+      items: [p8Item],
+    }),
+  });
+  check("checkout rejects unknown zone (404)", unknownZoneBuy.status === 404);
+
+  // Legacy clients (no zone) keep working with the flat rate.
+  const legacyBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...p8Customer, items: [p8Item] }),
+  }).then((r) => r.json());
+  check(
+    "checkout without a zone keeps legacy flat shipping",
+    legacyBuy.ok === true && legacyBuy.shipping === 995,
+    JSON.stringify(legacyBuy),
+  );
+
+  // 13.4 Delivery status lifecycle + audit trail.
+  const badDeliveryMove = await jfetch(`${BASE}/api/admin/orders/${homeOrderId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ deliveryStatus: "in_transit" }),
+  });
+  const badDeliveryBody = await badDeliveryMove.json();
+  check(
+    "illegal delivery transition rejected (409)",
+    badDeliveryMove.status === 409 && badDeliveryBody.code === "INVALID_DELIVERY_TRANSITION",
+  );
+  const unknownDelivery = await jfetch(`${BASE}/api/admin/orders/${homeOrderId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ deliveryStatus: "flying" }),
+  });
+  check("unknown delivery status rejected (400)", unknownDelivery.status === 400);
+  const toReady = await jfetch(`${BASE}/api/admin/orders/${homeOrderId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ deliveryStatus: "ready" }),
+  }).then((r) => r.json());
+  const toCourier = await jfetch(`${BASE}/api/admin/orders/${homeOrderId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ deliveryStatus: "handed_to_courier" }),
+  }).then((r) => r.json());
+  check(
+    "delivery status moves forward with validation",
+    toReady.ok === true && toCourier.ok === true,
+  );
+  const deliveryEvents = await jfetch(`${BASE}/api/admin/orders/${homeOrderId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const dEvents = deliveryEvents.events.filter((e) => e.kind === "delivery");
+  check(
+    "delivery transitions recorded in the audit trail",
+    dEvents.length === 2 &&
+      dEvents.some((e) => e.fromValue === "not_ready" && e.toValue === "ready"),
+  );
+
+  // 13.5 Security: admin session + CSRF required on delivery configuration.
+  const noAuthZones = await jfetch(`${BASE}/api/admin/delivery`);
+  const noCsrfZone = await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", cookie: auth.cookie },
+    body: JSON.stringify({ wilaya: "x", homePrice: 1 }),
+  });
+  check(
+    "delivery admin endpoints require session + CSRF (401)",
+    noAuthZones.status === 401 && noCsrfZone.status === 401,
+  );
+
+  // 13.6 Admin + storefront pages render.
+  const deliveryPage = await jfetch(`${BASE}/admin/delivery`, {
+    headers: { cookie: auth.cookie },
+  });
+  const deliveryHtml = normalized(await deliveryPage.text());
+  check(
+    "admin delivery page SSR renders management UI",
+    deliveryPage.status === 200 &&
+      deliveryHtml.includes("Create zone") &&
+      deliveryHtml.includes("Home Delivery"),
+  );
+  const checkoutPage = await jfetch(`${BASE}/checkout`);
+  const checkoutHtml = await checkoutPage.text();
+  // The cart hydrates client-side, so the SSR shell shows the empty-bag
+  // state; verify the delivery flow lives in the shipped client chunks.
+  const chunkSrcs = [...new Set(checkoutHtml.match(/\/_next\/static\/chunks\/[^"]+\.js/g) ?? [])];
+  let checkoutChunks = "";
+  for (const src of chunkSrcs.slice(0, 12)) {
+    try {
+      checkoutChunks += await (await jfetch(`${BASE}${src}`)).text();
+    } catch {}
+  }
+  check(
+    "checkout page renders + ships the wilaya delivery flow",
+    checkoutPage.status === 200 &&
+      checkoutChunks.includes("/api/delivery/zones") &&
+      checkoutChunks.includes("Select wilaya"),
+    JSON.stringify({ status: checkoutPage.status, chunks: chunkSrcs.length }),
+  );
+  const orderView = await jfetch(`${BASE}/admin/orders/${homeOrderId}`, {
+    headers: { cookie: auth.cookie },
+  });
+  const orderViewHtml = normalized(await orderView.text());
+  check(
+    "order detail shows the shipping snapshot + delivery status",
+    orderView.status === 200 &&
+      orderViewHtml.includes("Shipping method") &&
+      orderViewHtml.includes("Estimated delivery"),
+  );
+
+  // Phase 8 orders must not break the Meta Purchase contract.
+  check(
+    "purchase event id present for zone-based checkout",
+    typeof homeBuy.purchaseEventId === "string" && homeBuy.purchaseEventId.length > 0,
+  );
+
+  // Cleanup.
+  await jfetch(`${BASE}/api/admin/products/${p8Create.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  const finalZones = await jfetch(`${BASE}/api/admin/delivery`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "all seeded wilayas still present after Phase 8 mutations",
+    finalZones.zones.length >= 58,
+  );
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

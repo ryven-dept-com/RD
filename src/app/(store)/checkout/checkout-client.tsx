@@ -23,6 +23,22 @@ type Confirmation = {
   email: string;
 };
 
+// Phase 8: public delivery configuration (server is the source of truth —
+// the checkout API recomputes the final shipping fee on its own).
+type PublicZoneMethod = { price: number; estimatedTime: string } | null;
+type PublicZone = {
+  code: number;
+  wilaya: string;
+  city: string;
+  methods: { home: PublicZoneMethod; office: PublicZoneMethod };
+};
+type ShippingQuote = {
+  method: "home" | "office";
+  shipping: number;
+  freeShipping: boolean;
+  estimatedTime: string;
+};
+
 export function CheckoutClient() {
   const { items, subtotal, clearCart } = useCart();
   const {
@@ -47,13 +63,78 @@ export function CheckoutClient() {
     address: "",
     city: "",
     postalCode: "",
-    country: "United States",
+    country: "Algeria",
     card: "",
     exp: "",
     cvc: "",
   });
 
-  const shipping = subtotal >= freeShippingThreshold ? 0 : SHIPPING_FLAT;
+  // Phase 8: delivery zone + method selection.
+  const [zones, setZones] = useState<PublicZone[]>([]);
+  const [zonesError, setZonesError] = useState("");
+  const [deliveryZone, setDeliveryZone] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState<"home" | "office">("home");
+  const [commune, setCommune] = useState("");
+  // Keyed quote result: `quoteBusy`/`quote` are DERIVED, so no state is
+  // written synchronously inside effects (the fetch resolves into the key).
+  const [quoteResult, setQuoteResult] = useState<{
+    key: string;
+    quote: ShippingQuote | null;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/delivery/zones")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        if (data.ok && Array.isArray(data.zones)) setZones(data.zones);
+        else setZonesError("Delivery zones are unavailable right now.");
+      })
+      .catch(() => {
+        if (!cancelled) setZonesError("Delivery zones are unavailable right now.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const quoteKey = deliveryZone
+    ? `${deliveryZone}|${deliveryMethod}|${Math.max(0, Math.floor(subtotal))}`
+    : "";
+
+  // Server-computed shipping quote — the client only displays it.
+  useEffect(() => {
+    if (!quoteKey) return;
+    const [zone, method, sub] = quoteKey.split("|");
+    let cancelled = false;
+    fetch(
+      `/api/delivery/quote?zone=${encodeURIComponent(zone)}&method=${method}&subtotal=${sub}`,
+    )
+      .then((r) => r.json())
+      .then((data) => {
+        if (!cancelled) {
+          setQuoteResult({ key: quoteKey, quote: data.ok ? data.quote : null });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setQuoteResult({ key: quoteKey, quote: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [quoteKey]);
+
+  const selectedZone = zones.find((z) => String(z.code) === deliveryZone) ?? null;
+  const quoteBusy = Boolean(quoteKey) && quoteResult?.key !== quoteKey;
+  const quote = quoteResult?.key === quoteKey ? quoteResult.quote : null;
+  const effectiveQuote = deliveryZone ? quote : null;
+
+  const shipping = effectiveQuote
+    ? effectiveQuote.shipping
+    : subtotal >= freeShippingThreshold
+      ? 0
+      : SHIPPING_FLAT;
   const total = subtotal + shipping;
   const belowMinimum = minOrderAmount > 0 && subtotal < minOrderAmount;
 
@@ -96,6 +177,16 @@ export function CheckoutClient() {
           city: form.city,
           postalCode: form.postalCode,
           country: form.country,
+          // Phase 8: delivery selection — the server re-verifies the zone,
+          // method and price (client values are never trusted).
+          ...(deliveryZone
+            ? {
+                deliveryZone: Number(deliveryZone),
+                deliveryMethod,
+                commune: commune.trim() || undefined,
+                wilaya: selectedZone?.wilaya ?? "",
+              }
+            : {}),
           items: items.map((i) => ({
             slug: i.slug,
             size: i.size,
@@ -320,6 +411,49 @@ export function CheckoutClient() {
                     className={inputClass}
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    value={deliveryZone}
+                    onChange={(e) => {
+                      const code = e.target.value;
+                      setDeliveryZone(code);
+                      // Reset the method when the new zone doesn't offer it.
+                      const z = zones.find((x) => String(x.code) === code);
+                      if (z) {
+                        if (deliveryMethod === "home" && !z.methods.home) {
+                          setDeliveryMethod("office");
+                        } else if (deliveryMethod === "office" && !z.methods.office) {
+                          setDeliveryMethod("home");
+                        }
+                      }
+                    }}
+                    aria-label="Wilaya / delivery zone"
+                    className={inputClass}
+                  >
+                    <option value="">
+                      {zonesError
+                        ? "Wilaya — unavailable"
+                        : zones.length === 0
+                          ? "Loading wilayas…"
+                          : "Select wilaya"}
+                    </option>
+                    {zones.map((z) => (
+                      <option key={z.code} value={String(z.code)}>
+                        {z.wilaya}
+                        {z.city ? ` — ${z.city}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    value={commune}
+                    onChange={(e) => setCommune(e.target.value)}
+                    placeholder="Commune (optional)"
+                    className={inputClass}
+                  />
+                </div>
+                {zonesError && (
+                  <p className="text-xs font-medium text-red-600">{zonesError}</p>
+                )}
                 <input
                   required={requireAddress}
                   value={form.country}
@@ -328,6 +462,68 @@ export function CheckoutClient() {
                   className={inputClass}
                 />
               </div>
+            </section>
+
+            {/* Phase 8: delivery method (server-priced, per zone) */}
+            <section>
+              <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
+                Delivery
+              </h2>
+              {!deliveryZone ? (
+                <p className="mt-3 rounded-xl border border-black/10 bg-brand-50 px-4 py-4 text-sm text-black/55">
+                  Select your wilaya above to see available delivery methods
+                  and prices.
+                </p>
+              ) : selectedZone ? (
+                <div className="mt-3 space-y-3">
+                  {(["home", "office"] as const).map((m) => {
+                    const info = selectedZone.methods[m];
+                    if (!info) return null; // method not offered in this zone
+                    const selected = deliveryMethod === m;
+                    const free = subtotal >= freeShippingThreshold;
+                    return (
+                      <label
+                        key={m}
+                        className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3.5 transition-colors ${
+                          selected
+                            ? "border-ink bg-brand-50"
+                            : "border-black/10 hover:border-black/25"
+                        }`}
+                      >
+                        <span className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="deliveryMethod"
+                            checked={selected}
+                            onChange={() => setDeliveryMethod(m)}
+                            className="h-4 w-4 accent-ink"
+                          />
+                          <span>
+                            <span className="block text-sm font-semibold uppercase tracking-wide">
+                              {m === "home" ? "Home Delivery" : "Pickup / Office"}
+                            </span>
+                            <span className="block text-xs text-black/50">
+                              {info.estimatedTime || "Standard delivery time"}
+                            </span>
+                          </span>
+                        </span>
+                        <span className="text-sm font-semibold tabular-nums">
+                          {free ? "Free" : formatPrice(info.price)}
+                        </span>
+                      </label>
+                    );
+                  })}
+                  {quoteBusy && (
+                    <p className="text-xs text-black/40">Updating shipping…</p>
+                  )}
+                  {effectiveQuote?.estimatedTime && !quoteBusy && (
+                    <p className="text-xs text-black/50">
+                      Estimated delivery:{" "}
+                      <strong>{effectiveQuote.estimatedTime}</strong>
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </section>
 
             <section>
@@ -440,9 +636,21 @@ export function CheckoutClient() {
                   <dd className="tabular-nums">{formatPrice(subtotal)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-black/50">Shipping</dt>
+                  <dt className="text-black/50">
+                    Shipping
+                    {effectiveQuote && deliveryMethod === "office" && (
+                      <span className="block text-[11px] normal-case tracking-normal text-black/40">
+                        Pickup / Office
+                      </span>
+                    )}
+                    {effectiveQuote && deliveryMethod === "home" && (
+                      <span className="block text-[11px] normal-case tracking-normal text-black/40">
+                        Home Delivery
+                      </span>
+                    )}
+                  </dt>
                   <dd className="tabular-nums">
-                    {shipping === 0 ? "Free" : formatPrice(shipping)}
+                    {quoteBusy ? "…" : shipping === 0 ? "Free" : formatPrice(shipping)}
                   </dd>
                 </div>
                 <div className="flex justify-between border-t border-black/10 pt-3 text-base font-semibold">
@@ -450,7 +658,7 @@ export function CheckoutClient() {
                   <dd className="font-display text-xl">{formatPrice(total)}</dd>
                 </div>
               </dl>
-              {shipping > 0 && (
+              {!deliveryZone && shipping > 0 && (
                 <p className="mt-3 text-xs text-black/40">
                   Free shipping on orders over {formatPrice(freeShippingThreshold)}.
                 </p>
