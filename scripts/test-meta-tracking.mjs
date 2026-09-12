@@ -111,6 +111,7 @@ async function startApp() {
     cwd: root,
     env: { ...process.env, DATABASE_URL: databaseUrl, PORT: String(PORT) },
     stdio: ["ignore", "pipe", "pipe"],
+    detached: true, // own process group so stopAll can kill the server tree
   });
   const logChunks = [];
   appProc.stdout.on("data", (d) => logChunks.push(d.toString()));
@@ -131,7 +132,11 @@ async function startApp() {
 }
 
 async function stopAll() {
-  try { appProc?.kill("SIGKILL"); } catch {}
+  try {
+    if (appProc?.pid) process.kill(-appProc.pid, "SIGKILL"); // whole group
+  } catch {
+    try { appProc?.kill("SIGKILL"); } catch {}
+  }
   try { dbProc?.close(); } catch {}
 }
 
@@ -224,9 +229,319 @@ async function main() {
   );
   await putSettings(auth, { pixelEventAddToCart: "true" });
 
-  section("5) Purchase — event id + dedupe key from checkout API");
+  section("5) Phase 5 — product CRUD, variants, server-side stock");
+  const adminHeaders = {
+    cookie: auth.cookie,
+    "x-csrf-token": auth.csrf,
+    "Content-Type": "application/json",
+  };
+
+  // 5.1 Backfill: seeded products got variant rows; admin detail exposes them.
+  const adminListHtml = await jfetch(`${BASE}/admin/products`, {
+    headers: { cookie: auth.cookie },
+  }).then((r) => r.text());
+  const firstIdMatch = normalized(adminListHtml).match(/\/admin\/products\/(\d+)/);
+  check("admin products page lists products", Boolean(firstIdMatch));
+  const firstProductId = Number(firstIdMatch?.[1]);
+  const seededDetail = await jfetch(
+    `${BASE}/api/admin/products/${firstProductId}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "seeded product backfilled with variants",
+    seededDetail.ok === true &&
+      Array.isArray(seededDetail.variants) &&
+      seededDetail.variants.length > 0,
+  );
+  check(
+    "product exposes sku/status/sortOrder",
+    seededDetail.product &&
+      "sku" in seededDetail.product &&
+      "status" in seededDetail.product &&
+      "sortOrder" in seededDetail.product,
+  );
+  check(
+    "variant stock sum equals product stock",
+    seededDetail.variants.reduce((s, v) => s + v.stock, 0) ===
+      seededDetail.product.stock,
+  );
+
+  // 5.2 Create a product with explicit variants.
+  const TEST_SLUG = "phase5-test-variant-jacket";
+  const testVariants = [
+    { size: "M", color: "Onyx", sku: "P5-M-ONYX", stock: 2, active: true },
+    { size: "L", color: "Onyx", sku: "P5-L-ONYX", stock: 3, active: true },
+  ];
+  const createRes = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase5 Test Jacket",
+      slug: TEST_SLUG,
+      sku: "P5-JACKET",
+      tagline: "Integration test product",
+      description: "Created by the Phase 5 integration suite.",
+      price: "99.00",
+      category: "Jackets",
+      collection: "Vault 01",
+      images: "https://images.pexels.com/photo/test.jpg",
+      sizes: "M, L",
+      colors: "Onyx",
+      variants: testVariants,
+    }),
+  });
+  const created = await createRes.json().catch(() => ({}));
+  check(
+    "create product with variants",
+    createRes.status === 201 && created.ok === true,
+    JSON.stringify(created),
+  );
+
+  // Duplicate size × color combinations are rejected.
+  const dupRes = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Dup Variant Jacket",
+      price: "50",
+      category: "Jackets",
+      variants: [
+        { size: "M", color: "A", stock: 1 },
+        { size: "m", color: "a", stock: 1 },
+      ],
+    }),
+  });
+  check("duplicate variants rejected (400)", dupRes.status === 400);
+
+  // Slug collisions are rejected, never auto-renamed.
+  const clashRes = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Slug Clash",
+      price: "50",
+      category: "Jackets",
+      slug: TEST_SLUG,
+    }),
+  });
+  check("slug collision rejected (400)", clashRes.status === 400);
+
+  // Negative stock rejected.
+  const negRes = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Neg Stock",
+      price: "50",
+      category: "Jackets",
+      variants: [{ size: "M", color: "A", stock: -3 }],
+    }),
+  });
+  check("negative variant stock rejected (400)", negRes.status === 400);
+
+  // Persisted variants + stock sync.
+  const createdDetail = await jfetch(
+    `${BASE}/api/admin/products/${created.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "variants persisted with SKU/stock",
+    createdDetail.variants?.length === 2 &&
+      createdDetail.variants.some((v) => v.sku === "P5-M-ONYX" && v.stock === 2),
+  );
+  check(
+    "product stock synced from variants",
+    createdDetail.product.stock === 5 && createdDetail.product.soldOut === false,
+  );
+
+  // Unauthorized mutations rejected.
+  const noAuthRes = await jfetch(`${BASE}/api/admin/products/${created.id}`, {
+    method: "DELETE",
+  });
+  check("mutation without auth/CSRF rejected (401)", noAuthRes.status === 401);
+
+  // 5.3 PDP shows variant data; draft status hides the product.
+  const testPdp = await html(`/products/${TEST_SLUG}`);
+  check("variant product PDP renders", testPdp.status === 200);
+  check(
+    "PDP payload carries variant SKU",
+    normalized(testPdp.text).includes("P5-M-ONYX"),
+  );
+
+  const draftRes = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase5 Draft Item",
+      slug: "phase5-draft-item",
+      price: "10.00",
+      category: "Headwear",
+      status: "draft",
+    }),
+  });
+  const draftCreated = await draftRes.json().catch(() => ({}));
+  check("create draft product", draftRes.status === 201);
+  const draftPdp = await html("/products/phase5-draft-item");
+  check("draft product hidden from storefront (404)", draftPdp.status === 404);
+
+  // 5.4 Server-side stock enforcement at checkout.
+  const checkoutBase = {
+    email: "phase5@test.local",
+    fullName: "Phase Five",
+    address: "1 Variant Way",
+    city: "Setif",
+    postalCode: "19000",
+    country: "Algeria",
+    phone: "+213555000001",
+  };
+  const badCombo = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...checkoutBase,
+      items: [{ slug: TEST_SLUG, size: "XL", color: "Onyx", quantity: 1 }],
+    }),
+  });
+  check(
+    "checkout rejects unknown variant combo (409)",
+    badCombo.status === 409,
+    String(badCombo.status),
+  );
+
+  const overStock = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...checkoutBase,
+      items: [{ slug: TEST_SLUG, size: "M", color: "Onyx", quantity: 10 }],
+    }),
+  });
+  check(
+    "checkout rejects quantity above variant stock (409)",
+    overStock.status === 409,
+    String(overStock.status),
+  );
+
+  const goodBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...checkoutBase,
+      items: [
+        {
+          slug: TEST_SLUG,
+          size: "M",
+          color: "Onyx",
+          quantity: 2,
+          variantId: createdDetail.variants.find((v) => v.size === "M")?.id,
+          sku: "P5-M-ONYX",
+        },
+      ],
+    }),
+  }).then((r) => r.json());
+  check("checkout accepts in-stock variant", goodBuy.ok === true, JSON.stringify(goodBuy));
+
+  const afterBuy = await jfetch(`${BASE}/api/admin/products/${created.id}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const mAfter = afterBuy.variants.find((v) => v.size === "M");
+  const lAfter = afterBuy.variants.find((v) => v.size === "L");
+  check(
+    "variant stock decremented server-side",
+    mAfter?.stock === 0 && lAfter?.stock === 3,
+    JSON.stringify(afterBuy.variants),
+  );
+  check(
+    "product total re-synced after purchase",
+    afterBuy.product.stock === 3,
+  );
+
+  const soldOutBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...checkoutBase,
+      items: [{ slug: TEST_SLUG, size: "M", color: "Onyx", quantity: 1 }],
+    }),
+  });
+  check(
+    "out-of-stock variant cannot be purchased (409)",
+    soldOutBuy.status === 409,
+    String(soldOutBuy.status),
+  );
+
+  // 5.5 Search / filter parity on the public API + shop page.
+  const qSearch = await jfetch(`${BASE}/api/products?q=vault`).then((r) => r.json());
+  check(
+    "product search returns matching products",
+    qSearch.ok === true &&
+      qSearch.count > 0 &&
+      qSearch.products.some((p) => p.name.toLowerCase().includes("vault")),
+  );
+  const qNoMatch = await jfetch(`${BASE}/api/products?q=zzzznope`).then((r) => r.json());
+  check("search with no matches returns empty", qNoMatch.count === 0);
+  const sizeFilter = await jfetch(`${BASE}/api/products?size=L&color=Onyx`).then((r) => r.json());
+  check(
+    "size/color filter returns products with that variant",
+    sizeFilter.ok === true &&
+      sizeFilter.products.some((p) => p.slug === TEST_SLUG),
+    JSON.stringify(sizeFilter.products?.map((p) => p.slug)),
+  );
+  const shopSize = await html("/shop?size=M");
+  const shopQ = await html("/shop?q=hoodie");
+  check("shop page supports size filter", shopSize.status === 200);
+  check("shop page supports search", shopQ.status === 200);
+
+  // Draft products must never reach the catalog feed either.
+  const draftCatalog = await jfetch(`${BASE}/api/catalog`).then((r) => r.text());
+  check(
+    "draft product excluded from catalog feed",
+    !draftCatalog.includes("phase5-draft-item"),
+  );
+
+  // 5.6 Cleanup: delete the test products.
+  const delRes = await jfetch(`${BASE}/api/admin/products/${created.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  check("delete product", delRes.status === 200);
+  if (draftCreated?.id) {
+    await jfetch(`${BASE}/api/admin/products/${draftCreated.id}`, {
+      method: "DELETE",
+      headers: adminHeaders,
+    });
+  }
+  const deletedPdp = await html(`/products/${TEST_SLUG}`);
+  check("deleted product gone from storefront (404)", deletedPdp.status === 404);
+
+  section("6) Purchase — event id + dedupe key from checkout API");
+  // Use REAL backfilled variants (Phase 5). Resolve two in-stock variants of
+  // the first public product so the assertions never depend on hard-coded
+  // size/color names that vary across the catalogue.
+  let purchaseDetail = null;
+  for (let id = 1; id <= 20; id += 1) {
+    const d = await jfetch(`${BASE}/api/admin/products/${id}`, {
+      headers: adminHeaders,
+    }).then((r) => r.json().catch(() => ({})));
+    if (d?.product?.slug === slug) {
+      purchaseDetail = d;
+      break;
+    }
+  }
+  check("resolved admin detail for storefront product", Boolean(purchaseDetail));
+  const inStockVariants = (purchaseDetail.variants || []).filter(
+    (v) => v.active && v.stock >= 2,
+  );
+  check(
+    "first product has purchasable variants",
+    inStockVariants.length >= 2,
+    JSON.stringify(purchaseDetail?.variants?.slice(0, 3)),
+  );
+  const vA = inStockVariants[0] ?? { size: "", color: "" };
+  const vB = inStockVariants[1] ?? vA;
+
   const orderPayload = {
-    items: [{ slug, size: "M", color: "Default", quantity: 2 }],
+    items: [{ slug, size: vA.size, color: vA.color, quantity: 2 }],
     email: "meta@test.local",
     fullName: "Meta Test",
     address: "1 Pixel Way",
@@ -250,14 +565,18 @@ async function main() {
   const o2 = await jfetch(`${BASE}/api/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...orderPayload, email: "meta2@test.local" }),
+    body: JSON.stringify({
+      ...orderPayload,
+      items: [{ slug, size: vB.size, color: vB.color, quantity: 2 }],
+      email: "meta2@test.local",
+    }),
   }).then((r) => r.json());
   check(
     "distinct orders get distinct Purchase event ids",
     o2.purchaseEventId && o1.purchaseEventId !== o2.purchaseEventId,
   );
 
-  section("6) Purchase not duplicated on refresh");
+  section("7) Purchase not duplicated on refresh");
   // The client marks an order as tracked in sessionStorage before firing and
   // skips re-firing. Verify the guard ships in the client bundle.
   const bundle = await jfetch(`${BASE}/checkout`).then((r) => r.text());
@@ -274,7 +593,7 @@ async function main() {
   }
   check("refresh-guard (order dedupe) present in client code", foundGuard);
 
-  section("7) Catalog feed (Meta Commerce Manager)");
+  section("8) Catalog feed (Meta Commerce Manager)");
   const cat = await jfetch(`${BASE}/api/catalog`);
   check("catalog endpoint 200", cat.status === 200);
   const ctype = cat.headers.get("content-type") || "";
@@ -310,7 +629,7 @@ async function main() {
     dataRows[0][priceIdx].includes("DZD"),
   );
 
-  section("8) Secret hygiene — CAPI token never leaves the server");
+  section("9) Secret hygiene — CAPI token never leaves the server");
   const SECRET = "EAABsupersecretCAPItoken123";
   await putSettings(auth, { metaCapiEnabled: "true", metaCapiAccessToken: SECRET });
   const homeAfter = await html("/");
@@ -326,7 +645,7 @@ async function main() {
     echo.body?.settings && !("metaCapiAccessToken" in echo.body.settings),
   );
 
-  section("9) Graceful degradation");
+  section("10) Graceful degradation");
   await putSettings(auth, { metaPixelEnabled: "false" });
   const homeOff = await html("/");
   check(

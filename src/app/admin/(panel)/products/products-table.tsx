@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAdmin } from "@/context/admin-context";
 import { formatDZD } from "@/lib/admin-format";
 
@@ -10,48 +10,63 @@ type Row = {
   id: number;
   name: string;
   slug: string;
+  sku: string;
   category: string;
   price: number;
   compareAtPrice: number | null;
   stock: number;
+  totalStock: number;
+  variantCount: number;
   image: string;
   isNew: boolean;
   onSale: boolean;
   featured: boolean;
   soldOut: boolean;
-  active: boolean;
+  status: string;
 };
 
 const PAGE_SIZE = 8;
 
+const SORTS = [
+  { value: "", label: "Newest" },
+  { value: "oldest", label: "Oldest" },
+  { value: "name", label: "Name A–Z" },
+  { value: "stock-asc", label: "Stock: low first" },
+  { value: "stock-desc", label: "Stock: high first" },
+  { value: "manual", label: "Manual order" },
+];
+
 export function ProductsTable({ products }: { products: Row[] }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const { adminFetch } = useAdmin();
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
+  const [query, setQuery] = useState(params.get("q") ?? "");
   const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState<number | null>(null);
+
+  const status = params.get("status") ?? "";
+  const category = params.get("category") ?? "";
+  const sort = params.get("sort") ?? "";
+
+  const pushParams = (patch: Record<string, string>) => {
+    const next = new URLSearchParams(params.toString());
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+    setPage(1);
+  };
 
   const categories = useMemo(
     () => [...new Set(products.map((p) => p.category))].sort(),
     [products],
   );
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter((p) => {
-      const matchesQ =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        p.category.toLowerCase().includes(q);
-      const matchesC = !category || p.category === category;
-      return matchesQ && matchesC;
-    });
-  }, [products, query, category]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(products.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageRows = filtered.slice(
+  const pageRows = products.slice(
     (safePage - 1) * PAGE_SIZE,
     safePage * PAGE_SIZE,
   );
@@ -73,19 +88,29 @@ export function ProductsTable({ products }: { products: Row[] }) {
       <div className="flex flex-col gap-3 border-b border-slate-200 p-4 sm:flex-row sm:items-center">
         <input
           value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPage(1);
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              pushParams({ q: query.trim() });
+            }
           }}
-          placeholder="Search products…"
+          placeholder="Search name, SKU or slug…"
           className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none sm:max-w-xs"
         />
         <select
+          value={status}
+          onChange={(e) => pushParams({ status: e.target.value })}
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+        >
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="draft">Draft</option>
+          <option value="archived">Archived</option>
+        </select>
+        <select
           value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => pushParams({ category: e.target.value })}
           className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
         >
           <option value="">All categories</option>
@@ -95,8 +120,19 @@ export function ProductsTable({ products }: { products: Row[] }) {
             </option>
           ))}
         </select>
+        <select
+          value={sort}
+          onChange={(e) => pushParams({ sort: e.target.value })}
+          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+        >
+          {SORTS.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
         <span className="text-sm text-slate-400 sm:ml-auto">
-          {filtered.length} results
+          {products.length} results
         </span>
       </div>
 
@@ -105,6 +141,7 @@ export function ProductsTable({ products }: { products: Row[] }) {
           <thead>
             <tr className="border-b border-slate-100 text-left text-xs uppercase tracking-wide text-slate-400">
               <th className="px-4 py-3 font-medium">Product</th>
+              <th className="px-4 py-3 font-medium">Status</th>
               <th className="px-4 py-3 font-medium">Category</th>
               <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Stock</th>
@@ -115,7 +152,7 @@ export function ProductsTable({ products }: { products: Row[] }) {
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
                   No products found.
                 </td>
               </tr>
@@ -139,9 +176,24 @@ export function ProductsTable({ products }: { products: Row[] }) {
                       </div>
                       <div>
                         <p className="font-medium text-slate-900">{p.name}</p>
-                        <p className="text-xs text-slate-400">{p.slug}</p>
+                        <p className="text-xs text-slate-400">
+                          {p.sku || p.slug}
+                        </p>
                       </div>
                     </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Flag
+                      color={
+                        p.status === "active"
+                          ? "green"
+                          : p.status === "draft"
+                            ? "amber"
+                            : "slate"
+                      }
+                    >
+                      {p.status || "active"}
+                    </Flag>
                   </td>
                   <td className="px-4 py-3 text-slate-600">{p.category}</td>
                   <td className="px-4 py-3">
@@ -157,11 +209,20 @@ export function ProductsTable({ products }: { products: Row[] }) {
                   <td className="px-4 py-3">
                     <span
                       className={`tabular-nums ${
-                        p.stock <= 8 ? "font-semibold text-rose-600" : "text-slate-600"
+                        p.totalStock <= 0
+                          ? "font-semibold text-rose-600"
+                          : p.totalStock <= 8
+                            ? "font-semibold text-amber-600"
+                            : "text-slate-600"
                       }`}
                     >
-                      {p.stock}
+                      {p.totalStock}
                     </span>
+                    {p.variantCount > 0 && (
+                      <span className="ml-1.5 text-xs text-slate-400">
+                        · {p.variantCount} variants
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1">
@@ -169,7 +230,6 @@ export function ProductsTable({ products }: { products: Row[] }) {
                       {p.onSale && <Flag color="amber">Sale</Flag>}
                       {p.featured && <Flag color="purple">Featured</Flag>}
                       {p.soldOut && <Flag color="rose">Sold out</Flag>}
-                      {!p.active && <Flag color="slate">Hidden</Flag>}
                     </div>
                   </td>
                   <td className="px-4 py-3">
@@ -228,7 +288,7 @@ function Flag({
   color,
 }: {
   children: React.ReactNode;
-  color: "blue" | "amber" | "purple" | "rose" | "slate";
+  color: "blue" | "amber" | "purple" | "rose" | "slate" | "green";
 }) {
   const map = {
     blue: "bg-blue-100 text-blue-700",
@@ -236,9 +296,10 @@ function Flag({
     purple: "bg-purple-100 text-purple-700",
     rose: "bg-rose-100 text-rose-700",
     slate: "bg-slate-200 text-slate-600",
+    green: "bg-emerald-100 text-emerald-700",
   };
   return (
-    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${map[color]}`}>
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold capitalize ${map[color]}`}>
       {children}
     </span>
   );

@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { products } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { productVariants, products } from "@/db/schema";
+import { and, asc, eq } from "drizzle-orm";
 import { getStoreSettings } from "@/lib/settings";
 import {
   buildCatalogRows,
@@ -8,6 +8,7 @@ import {
   feedCurrencyCode,
   toCsv,
   type CatalogProduct,
+  type CatalogVariant,
 } from "@/lib/catalog";
 
 export const dynamic = "force-dynamic";
@@ -26,16 +27,41 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const origin = new URL(request.url).origin;
 
-  const [rows, store] = await Promise.all([
-    db.select().from(products).where(eq(products.active, true)),
+  const [rows, variantRows, store] = await Promise.all([
+    db
+      .select()
+      .from(products)
+      .where(and(eq(products.active, true), eq(products.status, "active"))),
+    db
+      .select()
+      .from(productVariants)
+      .orderBy(asc(productVariants.position), asc(productVariants.id)),
     getStoreSettings().catch(() => null),
   ]);
+
+  // Group real variant rows per product for variant-aware feed rows.
+  const variantsByProduct = new Map<number, CatalogVariant[]>();
+  for (const v of variantRows) {
+    const list = variantsByProduct.get(v.productId) ?? [];
+    list.push({
+      id: v.id,
+      size: v.size,
+      color: v.color,
+      sku: v.sku,
+      stock: v.stock,
+      active: v.active,
+    });
+    variantsByProduct.set(v.productId, list);
+  }
 
   const currencyCode = feedCurrencyCode(store?.currency ?? "");
   const brand = store?.storeName || "RUVEN DEPT";
 
   const feedRows = (rows as unknown as CatalogProduct[]).flatMap((p) =>
-    buildCatalogRows(p, { origin, currencyCode, brand }),
+    buildCatalogRows(
+      { ...p, variants: variantsByProduct.get(p.id) },
+      { origin, currencyCode, brand },
+    ),
   );
 
   const csv = toCsv(CATALOG_COLUMNS, feedRows);

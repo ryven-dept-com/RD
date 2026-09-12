@@ -8,6 +8,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 const bytea = customType<{ data: Buffer; notNull: true; default: never }>({
@@ -37,6 +38,10 @@ export const products = pgTable("products", {
   soldOut: boolean("sold_out").notNull().default(false),
   active: boolean("active").notNull().default(true),
   stock: integer("stock").notNull().default(50),
+  // ---- Phase 5 (product management). Additive columns.
+  sku: text("sku").notNull().default(""),
+  status: text("status").notNull().default("active"), // draft | active | archived
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -73,6 +78,38 @@ export const orders = pgTable("orders", {
   status: text("status").notNull().default("جديد"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+// ---------------- PRODUCT VARIANTS (Phase 5) ----------------
+// One row per size × color combination. Unique per product so duplicate
+// variants are impossible at the database level. `products.stock` remains
+// the catalogue-level total and is kept in sync with the sum of variant
+// stocks for backwards compatibility.
+export const productVariants = pgTable(
+  "product_variants",
+  {
+    id: serial("id").primaryKey(),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+    size: text("size").notNull().default(""),
+    color: text("color").notNull().default(""),
+    sku: text("sku").notNull().default(""),
+    stock: integer("stock").notNull().default(0),
+    active: boolean("active").notNull().default(true),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [
+    {
+      productSizeColorUnique: uniqueIndex("product_variants_product_size_color_uniq").on(
+        t.productId,
+        t.size,
+        t.color,
+      ),
+      productIdIdx: index("product_variants_product_id_idx").on(t.productId),
+    },
+  ],
+);
 
 // ---------------- ADMIN / MANAGEMENT ----------------
 
@@ -180,9 +217,15 @@ export type OrderItem = {
   size: string;
   color: string;
   image: string;
+  /** Phase 5: exact variant purchased (present when the product has variants). */
+  variantId?: number;
+  sku?: string;
 };
 
 export type Product = typeof products.$inferSelect;
+export type ProductVariant = typeof productVariants.$inferSelect;
+export const PRODUCT_STATUSES = ["draft", "active", "archived"] as const;
+export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 export type Review = typeof reviews.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type AdminUser = typeof adminUsers.$inferSelect;

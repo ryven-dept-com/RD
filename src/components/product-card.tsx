@@ -15,6 +15,7 @@ export type ProductCardData = {
   colors: string[];
   isNew: boolean;
   bestSeller: boolean;
+  soldOut: boolean;
   avgRating: number;
   reviewCount: number;
 };
@@ -60,6 +61,11 @@ export function ProductCard({
 
         {/* badges */}
         <div className="absolute left-3 top-3 flex flex-col gap-1.5">
+          {product.soldOut && (
+            <span className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-ink shadow-sm">
+              Sold Out
+            </span>
+          )}
           {product.isNew && (
             <span className="rounded-full bg-ink px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-bone">
               New

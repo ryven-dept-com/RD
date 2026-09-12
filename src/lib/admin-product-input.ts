@@ -1,3 +1,5 @@
+import { PRODUCT_STATUSES, type ProductStatus } from "@/db/schema";
+
 export type ParsedProduct = {
   slug: string;
   name: string;
@@ -18,6 +20,10 @@ export type ParsedProduct = {
   soldOut: boolean;
   active: boolean;
   stock: number;
+  // ---- Phase 5 ----
+  sku: string;
+  status: ProductStatus;
+  sortOrder: number;
 };
 
 export function slugify(input: string): string {
@@ -43,6 +49,17 @@ function toList(value: unknown, sep: "line" | "comma"): string[] {
   return parts.map((s) => s.trim()).filter(Boolean);
 }
 
+/** Only safe image sources: internal paths or http(s) URLs. */
+export function isSafeImageUrl(value: string): boolean {
+  if (value.startsWith("/")) return !value.startsWith("//");
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export type ParseResult =
   | { ok: true; data: ParsedProduct }
   | { ok: false; error: string };
@@ -63,6 +80,25 @@ export function parseProductInput(body: Record<string, unknown>): ParseResult {
   const stockN = Number(body.stock);
   const stock = Number.isFinite(stockN) && stockN >= 0 ? Math.floor(stockN) : 0;
 
+  const statusRaw = String(body.status ?? "").trim();
+  const status: ProductStatus = (PRODUCT_STATUSES as readonly string[]).includes(
+    statusRaw,
+  )
+    ? (statusRaw as ProductStatus)
+    : body.active === false
+      ? "draft"
+      : "active";
+
+  const sortOrderN = Number(body.sortOrder);
+  const sortOrder =
+    Number.isFinite(sortOrderN) && Math.abs(sortOrderN) <= 1_000_000
+      ? Math.floor(sortOrderN)
+      : 0;
+
+  const images = toList(body.images, "line")
+    .filter(isSafeImageUrl)
+    .slice(0, 12);
+
   return {
     ok: true,
     data: {
@@ -74,7 +110,7 @@ export function parseProductInput(body: Record<string, unknown>): ParseResult {
       compareAtPrice: toCents(body.compareAtPrice),
       category: category.slice(0, 80),
       collection: String(body.collection ?? "").trim().slice(0, 80),
-      images: toList(body.images, "line").slice(0, 12),
+      images,
       sizes: toList(body.sizes, "comma").slice(0, 24),
       colors: toList(body.colors, "comma").slice(0, 24),
       details: toList(body.details, "line").slice(0, 24),
@@ -83,8 +119,11 @@ export function parseProductInput(body: Record<string, unknown>): ParseResult {
       bestSeller: Boolean(body.bestSeller),
       onSale: Boolean(body.onSale),
       soldOut: Boolean(body.soldOut),
-      active: body.active === undefined ? true : Boolean(body.active),
+      active: status === "active",
       stock,
+      sku: String(body.sku ?? "").trim().slice(0, 64),
+      status,
+      sortOrder,
     },
   };
 }

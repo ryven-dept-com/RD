@@ -101,6 +101,10 @@ export function CheckoutClient() {
             size: i.size,
             color: i.color,
             quantity: i.quantity,
+            // Exact variant + SKU so the server can validate live stock
+            // for the precise combination in the bag (Phase 5).
+            variantId: i.variantId ?? null,
+            sku: i.sku ?? null,
           })),
         }),
       });

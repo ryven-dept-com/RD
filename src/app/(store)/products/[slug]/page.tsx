@@ -142,6 +142,7 @@ export default async function ProductPage({
               colors={product.colors}
               stock={product.stock}
               category={product.category}
+              variants={detail.variants}
             />
           </div>
 

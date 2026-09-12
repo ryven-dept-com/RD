@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAllCategories, getProductByIdAdmin } from "@/lib/admin-queries";
+import { getVariantsForProduct } from "@/lib/product-admin";
 import { ProductForm, type ProductFormData } from "../product-form";
 
 export const dynamic = "force-dynamic";
@@ -19,16 +20,25 @@ export default async function EditProductPage({
   const productId = Number(id);
   if (!Number.isFinite(productId)) notFound();
 
-  const [product, cats] = await Promise.all([
+  const [product, cats, variants] = await Promise.all([
     getProductByIdAdmin(productId),
     getAllCategories(),
+    getVariantsForProduct(productId),
   ]);
   if (!product) notFound();
+
+  const status: ProductFormData["status"] =
+    product.status === "draft" || product.status === "archived"
+      ? product.status
+      : product.active
+        ? "active"
+        : "draft";
 
   const initial: ProductFormData = {
     id: product.id,
     name: product.name,
     slug: product.slug,
+    sku: product.sku ?? "",
     tagline: product.tagline,
     description: product.description,
     price: centsToStr(product.price),
@@ -36,7 +46,9 @@ export default async function EditProductPage({
     category: product.category,
     collection: product.collection,
     stock: String(product.stock),
-    images: product.images.join("\n"),
+    status,
+    sortOrder: String(product.sortOrder ?? 0),
+    images: product.images,
     sizes: product.sizes.join(", "),
     colors: product.colors.join(", "),
     details: product.details.join("\n"),
@@ -44,8 +56,13 @@ export default async function EditProductPage({
     isNew: product.isNew,
     bestSeller: product.bestSeller,
     onSale: product.onSale,
-    soldOut: product.soldOut,
-    active: product.active,
+    variants: variants.map((v) => ({
+      size: v.size,
+      color: v.color,
+      sku: v.sku,
+      stock: String(v.stock),
+      active: v.active,
+    })),
   };
 
   return (

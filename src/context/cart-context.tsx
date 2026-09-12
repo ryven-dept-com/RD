@@ -20,6 +20,10 @@ export type CartItem = {
   color: string;
   quantity: number;
   maxStock: number;
+  /** Exact variant purchased (Phase 5) — present for variant-backed items. */
+  variantId?: number;
+  /** Variant-level SKU sent to checkout/Meta when available. */
+  sku?: string;
 };
 
 type CartState = {

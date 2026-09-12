@@ -158,6 +158,114 @@ const CMS_SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "media_files_kind_idx" ON "media_files" ("kind")`,
 ];
 
+// ---------------------------------------------------------------------------
+// Product management schema (Phase 5). Runs on EVERY bootstrap (like the CMS
+// schema) so databases created before Phase 5 are upgraded in place:
+//   - new `product_variants` table (unique per product + size + color)
+//   - additive products columns: sku, status, sort_order
+//   - one-time, non-destructive backfill: every existing product gets one
+//     variant per size × color combination, splitting its stock so the
+//     catalogue-level total is preserved exactly (no data lost or invented).
+// All statements are IF NOT EXISTS / guarded — safe to run repeatedly.
+// ---------------------------------------------------------------------------
+/** Split `total` across `n` buckets preserving the exact sum. */
+function splitStockEvenly(total: number, n: number): number[] {
+  if (n <= 0) return [];
+  const base = Math.floor(total / n);
+  let remainder = total - base * n;
+  return Array.from({ length: n }, () => {
+    const extra = remainder > 0 ? 1 : 0;
+    remainder -= extra;
+    return base + extra;
+  });
+}
+
+const PRODUCT_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS "product_variants" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "product_id" integer NOT NULL REFERENCES "products"("id") ON DELETE cascade,
+    "size" text DEFAULT '' NOT NULL,
+    "color" text DEFAULT '' NOT NULL,
+    "sku" text DEFAULT '' NOT NULL,
+    "stock" integer DEFAULT 0 NOT NULL,
+    "active" boolean DEFAULT true NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "product_variants_product_size_color_uniq"
+     ON "product_variants" ("product_id", "size", "color")`,
+  `CREATE INDEX IF NOT EXISTS "product_variants_product_id_idx"
+     ON "product_variants" ("product_id")`,
+  `ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "sku" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'active' NOT NULL`,
+  `ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "sort_order" integer DEFAULT 0 NOT NULL`,
+];
+
+/**
+ * Backfill variants for products that predate Phase 5. Idempotent: only
+ * products with ZERO variants are touched. The product's existing stock is
+ * split across its generated variants so the sum is preserved exactly.
+ */
+async function backfillProductVariants(db: SeedDb): Promise<void> {
+  const missing = await db.execute(
+    sql.raw(`
+      SELECT p.id, p.sizes, p.colors, p.stock
+      FROM products p
+      WHERE NOT EXISTS (
+        SELECT 1 FROM product_variants v WHERE v.product_id = p.id
+      )
+      ORDER BY p.id
+    `),
+  );
+  const rows = missing.rows as Array<{
+    id: number;
+    sizes: string[] | string | null;
+    colors: string[] | string | null;
+    stock: number | null;
+  }>;
+  for (const row of rows) {
+    const sizes = Array.isArray(row.sizes) && row.sizes.length ? row.sizes : [""];
+    const colors = Array.isArray(row.colors) && row.colors.length ? row.colors : [""];
+    const total = Math.max(0, Math.floor(Number(row.stock) || 0));
+    const combos = sizes.length * colors.length;
+    const split = splitStockEvenly(total, combos);
+    let i = 0;
+    for (const size of sizes) {
+      for (const color of colors) {
+        await db.execute(sql.raw(`
+          INSERT INTO product_variants (product_id, size, color, sku, stock, active, position)
+          VALUES (${row.id}, '${String(size).replace(/'/g, "''")}', '${String(color).replace(/'/g, "''")}', '', ${split[i]}, true, ${i})
+          ON CONFLICT DO NOTHING
+        `));
+        i += 1;
+      }
+    }
+  }
+  // Reconcile the status column for rows created before it existed:
+  // inactive products become drafts; anything the admin already set stays.
+  await db.execute(sql.raw(`
+    UPDATE products SET status = 'draft'
+    WHERE active = false AND status = 'active'
+  `));
+  if (rows.length) {
+    console.log(`[bootstrap] backfilled variants for ${rows.length} products.`);
+  }
+}
+
+export async function ensureProductSchema(db: SeedDb): Promise<void> {
+  for (const statement of PRODUCT_SCHEMA_STATEMENTS) {
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (err) {
+      const e = err as { code?: string; cause?: { code?: string } };
+      const code = e.code ?? e.cause?.code;
+      // 42P07 duplicate_table / 42P16 duplicate_object / 42701 duplicate_column
+      if (code !== "42P07" && code !== "42P16" && code !== "42701") throw err;
+    }
+  }
+  await backfillProductVariants(db);
+}
+
 export async function ensureCmsSchema(db: SeedDb): Promise<void> {
   for (const statement of CMS_SCHEMA_STATEMENTS) {
     try {
@@ -448,6 +556,7 @@ export async function seedAdminData(
 export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureSchema(db);
   await ensureCmsSchema(db);
+  await ensureProductSchema(db);
 
   // Top the catalogue up to the full seed set (handles empty databases and
   // partial ones left by earlier concurrent/aborted seeding attempts).
@@ -458,6 +567,10 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
     );
     await seedCatalogue(db, { clear: false });
   }
+
+  // Idempotent: give any product still lacking variant rows a variant set
+  // (covers freshly seeded catalogues on empty databases).
+  await backfillProductVariants(db);
 
   const adminCount = await db.$count(adminUsers);
   const hasCategories = (await db.$count(categories)) > 0;

@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { CATEGORIES, COLLECTIONS } from "@/lib/seed-data";
 import { CloseIcon } from "@/components/icons";
 
@@ -18,6 +18,19 @@ const QUICK = [
   { value: "best", label: "Best Sellers" },
   { value: "sale", label: "On Sale" },
 ];
+
+/** Max-price steps (in cents) for the price filter. */
+const PRICE_STEPS = [
+  { value: 5000, label: "Under $50" },
+  { value: 10000, label: "Under $100" },
+  { value: 15000, label: "Under $150" },
+  { value: 25000, label: "Under $250" },
+];
+
+export type ShopFilterOptions = {
+  sizes: string[];
+  colors: string[];
+};
 
 export function SortSelect({ resultCount }: { resultCount: number }) {
   const router = useRouter();
@@ -55,7 +68,43 @@ export function SortSelect({ resultCount }: { resultCount: number }) {
   );
 }
 
-function FilterBody({ onNavigate }: { onNavigate?: () => void }) {
+/** Free-text search box (URL-driven, works on every viewport). */
+export function SearchBar({ className = "" }: { className?: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  const [value, setValue] = useState(params.get("q") ?? "");
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const next = new URLSearchParams(params.toString());
+    const q = value.trim();
+    if (q) next.set("q", q);
+    else next.delete("q");
+    router.push(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+
+  return (
+    <form onSubmit={submit} role="search" className={`w-full ${className}`}>
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Search products…"
+        aria-label="Search products"
+        className="w-full rounded-full border border-black/15 bg-transparent px-4 py-2 text-sm placeholder:text-black/35 focus:border-ink focus:outline-none"
+      />
+    </form>
+  );
+}
+
+function FilterBody({
+  options,
+  onNavigate,
+}: {
+  options: ShopFilterOptions;
+  onNavigate?: () => void;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -63,6 +112,10 @@ function FilterBody({ onNavigate }: { onNavigate?: () => void }) {
   const category = params.get("category") ?? "";
   const collection = params.get("collection") ?? "";
   const filter = params.get("filter") ?? "";
+  const size = params.get("size") ?? "";
+  const color = params.get("color") ?? "";
+  const inStock = params.get("inStock") === "1";
+  const maxPrice = Number(params.get("maxPrice") ?? "") || 0;
 
   const update = useCallback(
     (key: string, value: string) => {
@@ -75,16 +128,32 @@ function FilterBody({ onNavigate }: { onNavigate?: () => void }) {
     [params, pathname, router, onNavigate],
   );
 
-  const hasFilters = category || collection || filter;
+  const hasFilters = category || collection || filter || size || color || inStock || maxPrice;
 
   const clearAll = () => {
-    router.push(pathname, { scroll: false });
+    // Preserve the search query when clearing facet filters.
+    const next = new URLSearchParams();
+    const q = params.get("q");
+    if (q) next.set("q", q);
+    router.push(
+      next.size ? `${pathname}?${next.toString()}` : pathname,
+      { scroll: false },
+    );
     onNavigate?.();
   };
 
   const rowClass = (active: boolean) =>
     `flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
       active ? "bg-ink text-bone" : "hover:bg-black/5"
+    }`;
+
+  const chipClass = (active: boolean, disabled = false) =>
+    `rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+      active
+        ? "border-ink bg-ink text-bone"
+        : disabled
+          ? "cursor-not-allowed border-black/10 text-black/25"
+          : "border-black/15 hover:border-ink"
     }`;
 
   return (
@@ -131,13 +200,85 @@ function FilterBody({ onNavigate }: { onNavigate?: () => void }) {
             <button
               key={c}
               onClick={() => update("collection", c)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                collection === c
-                  ? "border-ink bg-ink text-bone"
-                  : "border-black/15 hover:border-ink"
-              }`}
+              className={chipClass(collection === c)}
             >
               {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Phase 5: size */}
+      {options.sizes.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
+            Size
+          </h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {options.sizes.map((s) => (
+              <button
+                key={s}
+                onClick={() => update("size", s)}
+                className={chipClass(size === s)}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Phase 5: color */}
+      {options.colors.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
+            Color
+          </h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {options.colors.map((c) => (
+              <button
+                key={c}
+                onClick={() => update("color", c)}
+                className={chipClass(color === c)}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Phase 5: availability */}
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
+          Availability
+        </h3>
+        <div className="mt-3 space-y-1">
+          <button onClick={() => update("inStock", "")} className={rowClass(!inStock)}>
+            All items
+          </button>
+          <button onClick={() => update("inStock", "1")} className={rowClass(inStock)}>
+            In stock only
+          </button>
+        </div>
+      </div>
+
+      {/* Phase 5: price */}
+      <div>
+        <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
+          Price
+        </h3>
+        <div className="mt-3 space-y-1">
+          <button onClick={() => update("maxPrice", "")} className={rowClass(!maxPrice)}>
+            Any price
+          </button>
+          {PRICE_STEPS.map((p) => (
+            <button
+              key={p.value}
+              onClick={() => update("maxPrice", String(p.value))}
+              className={rowClass(maxPrice === p.value)}
+            >
+              {p.label}
             </button>
           ))}
         </div>
@@ -163,17 +304,17 @@ function FilterBody({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
-export function DesktopFilters() {
+export function DesktopFilters({ options }: { options: ShopFilterOptions }) {
   return (
     <aside className="hidden w-56 shrink-0 lg:block">
       <div className="sticky top-24">
-        <FilterBody />
+        <FilterBody options={options} />
       </div>
     </aside>
   );
 }
 
-export function MobileFilters() {
+export function MobileFilters({ options }: { options: ShopFilterOptions }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -198,7 +339,7 @@ export function MobileFilters() {
                 <CloseIcon className="h-6 w-6" />
               </button>
             </div>
-            <FilterBody onNavigate={() => setOpen(false)} />
+            <FilterBody options={options} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       )}

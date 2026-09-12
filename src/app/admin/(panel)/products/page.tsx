@@ -1,13 +1,40 @@
 import Link from "next/link";
-import { getAllProductsAdmin } from "@/lib/admin-queries";
+import { searchProductsAdmin } from "@/lib/admin-queries";
 import { ProductsTable } from "./products-table";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Products" };
 
-export default async function AdminProductsPage() {
-  const products = await getAllProductsAdmin();
+type SearchParams = Promise<{
+  q?: string;
+  status?: string;
+  category?: string;
+  sort?: string;
+}>;
+
+const VALID_SORTS = new Set([
+  "newest",
+  "oldest",
+  "name",
+  "stock-asc",
+  "stock-desc",
+  "manual",
+]);
+
+export default async function AdminProductsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const sp = await searchParams;
+
+  const products = await searchProductsAdmin({
+    q: sp.q?.trim() || undefined,
+    status: sp.status || undefined,
+    category: sp.category || undefined,
+    sort: sp.sort && VALID_SORTS.has(sp.sort) ? (sp.sort as "newest") : undefined,
+  });
 
   return (
     <div className="space-y-6">
@@ -31,16 +58,19 @@ export default async function AdminProductsPage() {
           id: p.id,
           name: p.name,
           slug: p.slug,
+          sku: p.sku,
           category: p.category,
           price: p.price,
           compareAtPrice: p.compareAtPrice,
           stock: p.stock,
+          totalStock: p.totalStock,
+          variantCount: p.variantCount,
           image: p.images[0] ?? "",
           isNew: p.isNew,
           onSale: p.onSale,
           featured: p.featured,
           soldOut: p.soldOut,
-          active: p.active,
+          status: p.status,
         }))}
       />
     </div>

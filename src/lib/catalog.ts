@@ -12,6 +12,15 @@
  * groups.
  */
 
+export type CatalogVariant = {
+  id: number;
+  size: string;
+  color: string;
+  sku: string;
+  stock: number;
+  active: boolean;
+};
+
 export type CatalogProduct = {
   id: number;
   slug: string;
@@ -26,6 +35,8 @@ export type CatalogProduct = {
   soldOut: boolean;
   active: boolean;
   stock: number;
+  /** Phase 5: real variant rows. When present, one feed row per variant. */
+  variants?: CatalogVariant[];
 };
 
 export const CATALOG_COLUMNS = [
@@ -70,13 +81,19 @@ function absoluteUrl(url: string, origin: string): string {
 
 export type CatalogRow = Record<string, string>;
 
-/** Build all feed rows for one product (one per size × color variant). */
+/**
+ * Build all feed rows for one product — one per variant.
+ *
+ * Phase 5: when the product has real variant rows they drive the feed
+ * (per-variant availability from live stock). Feed item ids keep the same
+ * deterministic `${slug}_${size}_${color}` format used before Phase 5, so
+ * existing Commerce Manager items match instead of duplicating. Products
+ * without variants fall back to the denormalized size × color matrix.
+ */
 export function buildCatalogRows(
   product: CatalogProduct,
   opts: { origin: string; currencyCode: string; brand: string },
 ): CatalogRow[] {
-  const sizes = product.sizes.length ? product.sizes : [""];
-  const colors = product.colors.length ? product.colors : [""];
   const currency = opts.currencyCode;
 
   const hasSale =
@@ -89,35 +106,47 @@ export function buildCatalogRows(
     : formatFeedPrice(product.price, currency);
   const salePrice = hasSale ? formatFeedPrice(product.price, currency) : "";
 
-  const availability =
-    product.soldOut || product.stock <= 0 ? "out of stock" : "in stock";
   const imageLink = product.images[0]
     ? absoluteUrl(product.images[0], opts.origin)
     : "";
 
+  const activeVariants = (product.variants ?? []).filter((v) => v.active);
+  const combinations: Array<{ size: string; color: string; inStock: boolean }> =
+    activeVariants.length
+      ? activeVariants.map((v) => ({
+          size: v.size,
+          color: v.color,
+          inStock: v.stock > 0,
+        }))
+      : (product.sizes.length ? product.sizes : [""]).flatMap((size) =>
+          (product.colors.length ? product.colors : [""]).map((color) => ({
+            size,
+            color,
+            inStock: !product.soldOut && product.stock > 0,
+          })),
+        );
+
   const rows: CatalogRow[] = [];
-  for (const size of sizes) {
-    for (const color of colors) {
-      const variantId =
-        size || color
-          ? `${product.slug}_${slugifyVariant(size)}_${slugifyVariant(color)}`
-          : product.slug;
-      rows.push({
-        id: variantId,
-        title: product.name,
-        description: product.description.trim().slice(0, 5000),
-        availability,
-        condition: "new",
-        price,
-        sale_price: salePrice,
-        link: `${opts.origin}/products/${product.slug}`,
-        image_link: imageLink,
-        brand: opts.brand,
-        item_group_id: product.slug,
-        color,
-        size,
-      });
-    }
+  for (const combo of combinations) {
+    const variantId =
+      combo.size || combo.color
+        ? `${product.slug}_${slugifyVariant(combo.size)}_${slugifyVariant(combo.color)}`
+        : product.slug;
+    rows.push({
+      id: variantId,
+      title: product.name,
+      description: product.description.trim().slice(0, 5000),
+      availability: combo.inStock ? "in stock" : "out of stock",
+      condition: "new",
+      price,
+      sale_price: salePrice,
+      link: `${opts.origin}/products/${product.slug}`,
+      image_link: imageLink,
+      brand: opts.brand,
+      item_group_id: product.slug,
+      color: combo.color,
+      size: combo.size,
+    });
   }
   return rows;
 }

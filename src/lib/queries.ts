@@ -1,6 +1,13 @@
 import { db } from "@/db";
-import { products, reviews, type Product, type Review } from "@/db/schema";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import {
+  productVariants,
+  products,
+  reviews,
+  type Product,
+  type ProductVariant,
+  type Review,
+} from "@/db/schema";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { ProductCardData } from "@/components/product-card";
 
 export type RatingMap = Map<number, { avg: number; count: number }>;
@@ -61,9 +68,74 @@ export function toCardData(
     colors: p.colors,
     isNew: p.isNew,
     bestSeller: p.bestSeller,
+    soldOut: p.soldOut,
     avgRating: rating?.avg ?? 0,
     reviewCount: rating?.count ?? 0,
   };
+}
+
+/** Serializable variant shape for the storefront (no Date fields). */
+export type StorefrontVariant = {
+  id: number;
+  size: string;
+  color: string;
+  sku: string;
+  stock: number;
+  active: boolean;
+  position: number;
+};
+
+function toStorefrontVariant(v: ProductVariant): StorefrontVariant {
+  return {
+    id: v.id,
+    size: v.size,
+    color: v.color,
+    sku: v.sku,
+    stock: v.stock,
+    active: v.active,
+    position: v.position,
+  };
+}
+
+/** Active variants of one product, ordered by position. */
+export async function getProductVariants(
+  productId: number,
+): Promise<StorefrontVariant[]> {
+  try {
+    const rows = await db
+      .select()
+      .from(productVariants)
+      .where(eq(productVariants.productId, productId))
+      .orderBy(asc(productVariants.position), asc(productVariants.id));
+    return rows.filter((v) => v.active).map(toStorefrontVariant);
+  } catch (err) {
+    console.error("getProductVariants failed:", err);
+    return [];
+  }
+}
+
+/** Variants for a list of products (used to derive grid sizes per product). */
+export async function getVariantsForProducts(
+  productIds: number[],
+): Promise<Map<number, StorefrontVariant[]>> {
+  const map = new Map<number, StorefrontVariant[]>();
+  if (!productIds.length) return map;
+  try {
+    const rows = await db
+      .select()
+      .from(productVariants)
+      .where(inArray(productVariants.productId, productIds))
+      .orderBy(asc(productVariants.position), asc(productVariants.id));
+    for (const v of rows) {
+      if (!v.active) continue;
+      const list = map.get(v.productId) ?? [];
+      list.push(toStorefrontVariant(v));
+      map.set(v.productId, list);
+    }
+  } catch (err) {
+    console.error("getVariantsForProducts failed:", err);
+  }
+  return map;
 }
 
 export type ProductFilters = {
@@ -72,14 +144,49 @@ export type ProductFilters = {
   filter?: "new" | "best" | "sale";
   sort?: "featured" | "new" | "price-asc" | "price-desc" | "rating";
   maxPrice?: number;
+  /** Free-text search (name / tagline / category). */
+  q?: string;
+  /** Only products with an active variant of this size (in stock). */
+  size?: string;
+  /** Only products with an active variant of this color (in stock). */
+  color?: string;
+  /** Only products with stock available. */
+  inStock?: boolean;
 };
+
+/** Distinct sizes/colors across all active variants — options for the shop filters. */
+export async function getShopFilterOptions(): Promise<{
+  sizes: string[];
+  colors: string[];
+}> {
+  try {
+    await ensureSeeded();
+    const rows = await db
+      .select({ size: productVariants.size, color: productVariants.color })
+      .from(productVariants)
+      .where(eq(productVariants.active, true));
+    const sizes: string[] = [];
+    const colors: string[] = [];
+    for (const r of rows) {
+      if (r.size && !sizes.includes(r.size)) sizes.push(r.size);
+      if (r.color && !colors.includes(r.color)) colors.push(r.color);
+    }
+    return { sizes, colors };
+  } catch (err) {
+    console.error("getShopFilterOptions failed:", err);
+    return { sizes: [], colors: [] };
+  }
+}
 
 export async function getProducts(
   filters: ProductFilters = {},
 ): Promise<ProductCardData[]> {
   try {
     await ensureSeeded();
-    const conditions = [eq(products.active, true)];
+    const conditions = [
+      eq(products.active, true),
+      eq(products.status, "active"), // Phase 5: drafts/archived stay hidden
+    ];
     if (filters.category) conditions.push(eq(products.category, filters.category));
     if (filters.collection)
       conditions.push(eq(products.collection, filters.collection));
@@ -87,10 +194,49 @@ export async function getProducts(
     if (filters.filter === "best")
       conditions.push(eq(products.bestSeller, true));
 
-    const rows = await db
+    let rows = await db
       .select()
       .from(products)
-      .where(and(...conditions));
+      .where(and(...conditions))
+      .orderBy(asc(products.sortOrder), desc(products.createdAt));
+
+    // Phase 5: free-text search
+    if (filters.q) {
+      const needle = filters.q.trim().toLowerCase();
+      if (needle) {
+        rows = rows.filter((p) =>
+          [p.name, p.tagline, p.category, p.collection, p.sku]
+            .some((field) => field.toLowerCase().includes(needle)),
+        );
+      }
+    }
+
+    // Phase 5: size/color filters match against real variant rows that
+    // actually have stock (a size with zero stock doesn't match).
+    if (filters.size || filters.color) {
+      const variantMap = await getVariantsForProducts(rows.map((r) => r.id));
+      rows = rows.filter((p) => {
+        const vs = variantMap.get(p.id) ?? [];
+        if (filters.size) {
+          const has = vs.some(
+            (v) => v.size.toLowerCase() === filters.size!.toLowerCase() && v.stock > 0,
+          );
+          if (!has) return false;
+        }
+        if (filters.color) {
+          const has = vs.some(
+            (v) => v.color.toLowerCase() === filters.color!.toLowerCase() && v.stock > 0,
+          );
+          if (!has) return false;
+        }
+        return true;
+      });
+    }
+
+    // Phase 5: availability filter
+    if (filters.inStock) {
+      rows = rows.filter((p) => p.stock > 0 && !p.soldOut);
+    }
 
     const ratingMap = await getRatingMap();
     let cards = rows.map((p) => toCardData(p, ratingMap.get(p.id)));
@@ -147,7 +293,14 @@ export async function getFeaturedProducts(
     const rows = await db
       .select()
       .from(products)
-      .where(and(eq(products.featured, true), eq(products.active, true)))
+      .where(
+        and(
+          eq(products.featured, true),
+          eq(products.active, true),
+          eq(products.status, "active"),
+        ),
+      )
+      .orderBy(asc(products.sortOrder), desc(products.createdAt))
       .limit(limit);
     const ratingMap = await getRatingMap();
     return rows.map((p) => toCardData(p, ratingMap.get(p.id)));
@@ -163,7 +316,14 @@ export async function getNewProducts(limit = 4): Promise<ProductCardData[]> {
     const rows = await db
       .select()
       .from(products)
-      .where(and(eq(products.isNew, true), eq(products.active, true)))
+      .where(
+        and(
+          eq(products.isNew, true),
+          eq(products.active, true),
+          eq(products.status, "active"),
+        ),
+      )
+      .orderBy(asc(products.sortOrder), desc(products.createdAt))
       .limit(limit);
     const ratingMap = await getRatingMap();
     return rows.map((p) => toCardData(p, ratingMap.get(p.id)));
@@ -186,7 +346,13 @@ export async function getProductsByIds(
     const rows = await db
       .select()
       .from(products)
-      .where(and(inArray(products.id, ids), eq(products.active, true)));
+      .where(
+        and(
+          inArray(products.id, ids),
+          eq(products.active, true),
+          eq(products.status, "active"),
+        ),
+      );
     const byId = new Map(rows.map((r) => [r.id, r]));
     const ordered = ids
       .map((id) => byId.get(id))
@@ -201,6 +367,7 @@ export async function getProductsByIds(
 
 export type ProductDetail = {
   product: Product;
+  variants: StorefrontVariant[];
   reviews: Review[];
   avgRating: number;
   reviewCount: number;
@@ -215,9 +382,17 @@ export async function getProductBySlug(
     const [product] = await db
       .select()
       .from(products)
-      .where(eq(products.slug, slug))
+      .where(
+        and(
+          eq(products.slug, slug),
+          eq(products.active, true),
+          eq(products.status, "active"), // Phase 5: drafts/archived are hidden
+        ),
+      )
       .limit(1);
     if (!product) return null;
+
+    const variants = await getProductVariants(product.id);
 
     const productReviews = await db
       .select()
@@ -236,7 +411,13 @@ export async function getProductBySlug(
     const relatedRows = await db
       .select()
       .from(products)
-      .where(eq(products.category, product.category))
+      .where(
+        and(
+          eq(products.category, product.category),
+          eq(products.active, true),
+          eq(products.status, "active"),
+        ),
+      )
       .limit(5);
     const ratingMap = await getRatingMap();
     const related = relatedRows
@@ -246,6 +427,7 @@ export async function getProductBySlug(
 
     return {
       product,
+      variants,
       reviews: productReviews,
       avgRating,
       reviewCount: productReviews.length,

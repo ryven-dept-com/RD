@@ -97,6 +97,45 @@ describe("buildCatalogRows", () => {
   });
 });
 
+describe("buildCatalogRows — Phase 5 variant rows", () => {
+  it("emits one row per real variant with per-variant availability", () => {
+    const withVariants: CatalogProduct = {
+      ...baseProduct,
+      variants: [
+        { id: 1, size: "S", color: "Black", sku: "V-S", stock: 4, active: true },
+        { id: 2, size: "M", color: "Black", sku: "V-M", stock: 0, active: true },
+        { id: 3, size: "L", color: "Black", sku: "V-L", stock: 2, active: false },
+      ],
+    };
+    const rows = buildCatalogRows(withVariants, opts);
+    // Inactive variant (L) is excluded entirely.
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.id)).toEqual([
+      "vault-heavyweight-hoodie-black_s_black",
+      "vault-heavyweight-hoodie-black_m_black",
+    ]);
+    expect(rows[0].availability).toBe("in stock");
+    expect(rows[1].availability).toBe("out of stock");
+  });
+
+  it("keeps deterministic ids stable across the legacy and variant models", () => {
+    const legacy = buildCatalogRows(baseProduct, opts).map((r) => r.id);
+    const variantBacked = buildCatalogRows(
+      {
+        ...baseProduct,
+        variants: [
+          { id: 1, size: "S", color: "Black", sku: "", stock: 5, active: true },
+          { id: 2, size: "M", color: "Black", sku: "", stock: 5, active: true },
+        ],
+      },
+      opts,
+    ).map((r) => r.id);
+    // Same product, both models → identical feed item ids, so Commerce
+    // Manager matches items instead of duplicating them.
+    expect(variantBacked).toEqual(legacy);
+  });
+});
+
 describe("toCsv", () => {
   it("writes the Meta header and escapes quotes/commas/newlines", () => {
     const row = buildCatalogRows(

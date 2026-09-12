@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
 import { trackBuiltPixelEvent } from "@/components/meta-pixel";
@@ -9,6 +9,7 @@ import {
   buildViewContentEvent,
 } from "@/lib/pixel-events";
 import { BagIcon, CheckIcon, MinusIcon, PlusIcon } from "@/components/icons";
+import type { StorefrontVariant } from "@/lib/queries";
 
 type PurchaseProps = {
   productId: number;
@@ -20,18 +21,90 @@ type PurchaseProps = {
   colors: string[];
   stock: number;
   category: string;
+  variants?: StorefrontVariant[];
 };
+
+/** Ordered unique option values from the variant matrix. */
+function optionLists(variants: StorefrontVariant[]): {
+  sizes: string[];
+  colors: string[];
+} {
+  const sizes: string[] = [];
+  const colors: string[] = [];
+  for (const v of variants) {
+    if (v.size && !sizes.includes(v.size)) sizes.push(v.size);
+    if (v.color && !colors.includes(v.color)) colors.push(v.color);
+  }
+  return { sizes, colors };
+}
 
 export function ProductPurchase(props: PurchaseProps) {
   const { addItem } = useCart();
   const { formatPrice, pixel, currency } = useStoreConfig();
-  const [color, setColor] = useState(props.colors[0] ?? "Default");
+
+  const variants = useMemo(() => props.variants ?? [], [props.variants]);
+  const hasVariants = variants.length > 0;
+
+  // Option lists come from the variant matrix when present so every button
+  // maps to a real purchasable combination; legacy products fall back to the
+  // product-level size/color arrays.
+  const options = useMemo(
+    () =>
+      hasVariants
+        ? optionLists(variants)
+        : { sizes: props.sizes, colors: props.colors },
+    [hasVariants, variants, props.sizes, props.colors],
+  );
+
+  const [color, setColor] = useState(
+    options.colors[0] ?? "Default",
+  );
   const [size, setSize] = useState<string>(
-    props.sizes.length === 1 ? props.sizes[0] : "",
+    options.sizes.length === 1 ? options.sizes[0] : "",
   );
   const [qty, setQty] = useState(1);
   const [error, setError] = useState(false);
   const [added, setAdded] = useState(false);
+
+  const selectedVariant = hasVariants
+    ? variants.find((v) => v.size === size && v.color === color) ?? null
+    : null;
+
+  // Live stock for the exact selection (variant-level when variants exist,
+  // product-level for legacy items).
+  const effectiveStock = hasVariants
+    ? selectedVariant?.stock ?? 0
+    : props.stock;
+  const lowStock = effectiveStock > 0 && effectiveStock <= 8;
+
+  // Availability of each option given the OTHER current selection, so a
+  // size/color combination with no variant (or no stock) is clearly disabled.
+  const colorIsAvailable = (c: string) => {
+    if (!hasVariants) return true;
+    const pool = size ? variants.filter((v) => v.size === size) : variants;
+    return pool.some((v) => v.color === c && v.stock > 0);
+  };
+  const sizeIsAvailable = (s: string) => {
+    if (!hasVariants) return true;
+    const pool = color ? variants.filter((v) => v.color === color) : variants;
+    return pool.some((v) => v.size === s && v.stock > 0);
+  };
+
+  const handleColor = (c: string) => {
+    setColor(c);
+    // If the current size has no stock in this color, drop the size choice.
+    if (hasVariants && size && !variants.some(
+      (v) => v.size === size && v.color === c && v.stock > 0,
+    )) {
+      setSize("");
+    }
+    setQty(1);
+  };
+  const handleSize = (s: string) => {
+    setSize(s);
+    setError(false);
+    setQty(1);
+  };
 
   // ViewContent standard event for Meta Pixel — real product identifier,
   // name, price and the store's configured currency.
@@ -53,11 +126,15 @@ export function ProductPurchase(props: PurchaseProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const needSize = options.sizes.length > 0 && !size;
+  const canAdd = !needSize && effectiveStock > 0;
+
   const handleAdd = () => {
-    if (!size) {
+    if (needSize) {
       setError(true);
       return;
     }
+    if (effectiveStock <= 0) return;
     addItem({
       productId: props.productId,
       slug: props.slug,
@@ -66,8 +143,10 @@ export function ProductPurchase(props: PurchaseProps) {
       image: props.image,
       size,
       color,
-      quantity: qty,
-      maxStock: props.stock,
+      quantity: Math.min(qty, effectiveStock),
+      maxStock: effectiveStock,
+      variantId: selectedVariant?.id,
+      sku: selectedVariant?.sku || undefined,
     });
     if (pixel.enabled && pixel.events.addToCart) {
       trackBuiltPixelEvent(
@@ -82,12 +161,10 @@ export function ProductPurchase(props: PurchaseProps) {
     setTimeout(() => setAdded(false), 1800);
   };
 
-  const lowStock = props.stock <= 8;
-
   return (
     <div className="space-y-6">
       {/* color */}
-      {props.colors.length > 0 && (
+      {options.colors.length > 0 && (
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-black/50">
@@ -96,19 +173,25 @@ export function ProductPurchase(props: PurchaseProps) {
             <span className="text-sm text-black/60">{color}</span>
           </div>
           <div className="flex flex-wrap gap-2">
-            {props.colors.map((c) => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
-                className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
-                  color === c
-                    ? "border-ink bg-ink text-bone"
-                    : "border-black/15 hover:border-ink"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
+            {options.colors.map((c) => {
+              const available = colorIsAvailable(c);
+              return (
+                <button
+                  key={c}
+                  onClick={() => available && handleColor(c)}
+                  disabled={!available}
+                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                    color === c
+                      ? "border-ink bg-ink text-bone"
+                      : available
+                        ? "border-black/15 hover:border-ink"
+                        : "cursor-not-allowed border-black/10 text-black/25 line-through"
+                  }`}
+                >
+                  {c}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -124,24 +207,27 @@ export function ProductPurchase(props: PurchaseProps) {
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
-          {props.sizes.map((s) => (
-            <button
-              key={s}
-              onClick={() => {
-                setSize(s);
-                setError(false);
-              }}
-              className={`min-w-12 rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
-                size === s
-                  ? "border-ink bg-ink text-bone"
-                  : "border-black/15 hover:border-ink"
-              }`}
-            >
-              {s}
-            </button>
-          ))}
+          {options.sizes.map((s) => {
+            const available = sizeIsAvailable(s);
+            return (
+              <button
+                key={s}
+                onClick={() => available && handleSize(s)}
+                disabled={!available}
+                className={`min-w-12 rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                  size === s
+                    ? "border-ink bg-ink text-bone"
+                    : available
+                      ? "border-black/15 hover:border-ink"
+                      : "cursor-not-allowed border-black/10 text-black/25 line-through"
+                }`}
+              >
+                {s}
+              </button>
+            );
+          })}
         </div>
-        {error && (
+        {error && needSize && (
           <p className="mt-2 text-xs font-medium text-red-600">
             Please select a size.
           </p>
@@ -163,9 +249,9 @@ export function ProductPurchase(props: PurchaseProps) {
             {qty}
           </span>
           <button
-            onClick={() => setQty((q) => Math.min(props.stock, q + 1))}
+            onClick={() => setQty((q) => Math.min(effectiveStock, q + 1))}
             className="flex h-12 w-12 items-center justify-center transition-opacity hover:opacity-60 disabled:opacity-30"
-            disabled={qty >= props.stock}
+            disabled={qty >= effectiveStock}
             aria-label="Increase quantity"
           >
             <PlusIcon className="h-4 w-4" />
@@ -174,9 +260,16 @@ export function ProductPurchase(props: PurchaseProps) {
 
         <button
           onClick={handleAdd}
-          className="group flex flex-1 items-center justify-center gap-2 rounded-full bg-ink px-6 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.02]"
+          disabled={!canAdd}
+          className={`group flex flex-1 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold uppercase tracking-widest transition-transform ${
+            canAdd
+              ? "bg-ink text-bone hover:scale-[1.02]"
+              : "cursor-not-allowed bg-black/10 text-black/40"
+          }`}
         >
-          {added ? (
+          {!canAdd && effectiveStock <= 0 && !needSize ? (
+            <>Sold Out</>
+          ) : added ? (
             <>
               <CheckIcon className="h-5 w-5" /> Added to bag
             </>
@@ -191,7 +284,7 @@ export function ProductPurchase(props: PurchaseProps) {
 
       {lowStock && (
         <p className="text-center text-xs font-medium text-amber-700">
-          Only {props.stock} left in stock — order soon.
+          Only {effectiveStock} left in stock — order soon.
         </p>
       )}
     </div>

@@ -1,9 +1,18 @@
 import { db } from "@/db";
-import { orders, products, type OrderItem } from "@/db/schema";
-import { inArray } from "drizzle-orm";
+import {
+  orders,
+  productVariants,
+  products,
+  type OrderItem,
+} from "@/db/schema";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getStoreSettings } from "@/lib/settings";
 import { makeEventId } from "@/lib/pixel-events";
 import { sendMetaPurchaseServerEvent } from "@/lib/meta-capi";
+import {
+  resolveVariantForCheckout,
+  syncProductStockFlags,
+} from "@/lib/product-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +24,7 @@ type IncomingItem = {
   size: string;
   color: string;
   quantity: number;
+  variantId?: number | null;
 };
 
 /**
@@ -24,6 +34,12 @@ type IncomingItem = {
  * - phone / address required-ness driven by settings
  * - free-shipping threshold read from the database
  * The free-shipping threshold and rules are NEVER trusted from the client.
+ *
+ * Phase 5: stock is enforced SERVER-side per variant. Each line is resolved
+ * to a real variant row (size + color must match an active variant when the
+ * product has variants); quantities are validated against live stock and
+ * decremented atomically in the same transaction as the order insert, so an
+ * unavailable variant can never be purchased.
  */
 export async function POST(request: Request) {
   let store;
@@ -80,39 +96,108 @@ export async function POST(request: Request) {
       }
     }
 
-    const slugs = [...new Set(items.map((i) => i.slug))];
+    const slugs = [...new Set(items.map((i) => String(i.slug ?? "")))];
     const rows = await db
       .select()
       .from(products)
       .where(inArray(products.slug, slugs));
     const bySlug = new Map(rows.map((r) => [r.slug, r]));
 
-    const orderItems: OrderItem[] = [];
-    let subtotal = 0;
+    // ------------------------------------------------------------------
+    // Validate every line against the live catalogue BEFORE writing.
+    // ------------------------------------------------------------------
+    type ValidatedLine = {
+      product: (typeof rows)[number];
+      size: string;
+      color: string;
+      quantity: number;
+      variantId: number | null;
+      sku: string;
+    };
+    const lines: ValidatedLine[] = [];
+
     for (const item of items) {
-      const p = bySlug.get(item.slug);
-      if (!p) continue;
+      const p = bySlug.get(String(item.slug ?? ""));
+      if (!p || !p.active || p.status !== "active") {
+        return Response.json(
+          {
+            ok: false,
+            error: "Some items in your bag are no longer available",
+            code: "PRODUCT_UNAVAILABLE",
+          },
+          { status: 409 },
+        );
+      }
       const qty = Math.max(1, Math.min(Number(item.quantity) || 1, 20));
-      subtotal += p.price * qty;
-      orderItems.push({
-        productId: p.id,
-        slug: p.slug,
-        name: p.name,
-        price: p.price,
-        quantity: qty,
-        size: String(item.size ?? ""),
-        color: String(item.color ?? ""),
-        image: p.images[0] ?? "",
-      });
+      const size = String(item.size ?? "");
+      const color = String(item.color ?? "");
+
+      const resolution = await resolveVariantForCheckout(p.id, size, color);
+      if (resolution.hasVariants) {
+        const v = resolution.variant;
+        // A requested variant id must agree with the size/color match.
+        if (
+          !v ||
+          !v.active ||
+          (item.variantId != null && Number(item.variantId) !== v.id)
+        ) {
+          return Response.json(
+            {
+              ok: false,
+              error: `${p.name}: the selected size/color combination is unavailable`,
+              code: "VARIANT_UNAVAILABLE",
+            },
+            { status: 409 },
+          );
+        }
+        lines.push({
+          product: p,
+          size,
+          color,
+          quantity: qty,
+          variantId: v.id,
+          sku: v.sku,
+        });
+      } else {
+        // Legacy product without variant rows — product-level stock applies.
+        lines.push({
+          product: p,
+          size,
+          color,
+          quantity: qty,
+          variantId: null,
+          sku: p.sku,
+        });
+      }
     }
 
-    if (!orderItems.length) {
+    if (!lines.length) {
       return Response.json(
         { ok: false, error: "No valid items in cart" },
         { status: 400 },
       );
     }
 
+    // Merge duplicate lines (same variant or same legacy product).
+    const merged: ValidatedLine[] = [];
+    for (const line of lines) {
+      const existing = merged.find(
+        (m) =>
+          m.product.id === line.product.id &&
+          (line.variantId
+            ? m.variantId === line.variantId
+            : m.variantId === null &&
+              m.size === line.size &&
+              m.color === line.color),
+      );
+      if (existing) existing.quantity = Math.min(existing.quantity + line.quantity, 50);
+      else merged.push({ ...line });
+    }
+
+    const subtotal = merged.reduce(
+      (sum, l) => sum + l.product.price * l.quantity,
+      0,
+    );
     if (minOrderAmount > 0 && subtotal < minOrderAmount) {
       return Response.json(
         { ok: false, error: "ORDER_BELOW_MINIMUM" },
@@ -120,31 +205,112 @@ export async function POST(request: Request) {
       );
     }
 
+    const orderItems: OrderItem[] = merged.map((l) => ({
+      productId: l.product.id,
+      slug: l.product.slug,
+      name: l.product.name,
+      price: l.product.price,
+      quantity: l.quantity,
+      size: l.size,
+      color: l.color,
+      image: l.product.images[0] ?? "",
+      variantId: l.variantId ?? undefined,
+      sku: l.sku || undefined,
+    }));
+
     const shipping = subtotal >= freeShipThreshold ? 0 : SHIPPING_FLAT;
     const total = subtotal + shipping;
     const orderNumber = `RVN-${Date.now().toString(36).toUpperCase()}${Math.floor(
       Math.random() * 900 + 100,
     )}`;
 
-    const [order] = await db
-      .insert(orders)
-      .values({
-        orderNumber,
-        email: String(body.email).trim(),
-        fullName: String(body.fullName).trim(),
-        phone: String(body.phone ?? "").trim(),
-        address: String(body.address ?? "").trim(),
-        city: String(body.city ?? "").trim(),
-        postalCode: String(body.postalCode ?? "").trim(),
-        country: String(body.country ?? "").trim(),
-        subtotal,
-        shipping,
-        deliveryPrice: shipping,
-        total,
-        items: orderItems,
-        status: "جديد",
-      })
-      .returning();
+    // ------------------------------------------------------------------
+    // Atomic purchase: guarded stock decrements + order insert in ONE
+    // transaction. Any insufficient stock aborts the whole checkout.
+    // ------------------------------------------------------------------
+    let insertError: { error: string; code: string } | null = null;
+    const inserted = await db.transaction(async (tx) => {
+      for (const line of merged) {
+        if (line.variantId != null) {
+          const updated = await tx
+            .update(productVariants)
+            .set({ stock: sql`${productVariants.stock} - ${line.quantity}` })
+            .where(
+              and(
+                eq(productVariants.id, line.variantId),
+                sql`${productVariants.stock} >= ${line.quantity}`,
+              ),
+            )
+            .returning({ id: productVariants.id });
+          if (!updated.length) {
+            insertError = {
+              error: `${line.product.name} (${line.size || "—"} / ${line.color || "—"}): only limited stock available`,
+              code: "INSUFFICIENT_STOCK",
+            };
+            throw new Error("INSUFFICIENT_STOCK");
+          }
+        } else {
+          const updated = await tx
+            .update(products)
+            .set({ stock: sql`${products.stock} - ${line.quantity}` })
+            .where(
+              and(
+                eq(products.id, line.product.id),
+                sql`${products.stock} >= ${line.quantity}`,
+              ),
+            )
+            .returning({ id: products.id });
+          if (!updated.length) {
+            insertError = {
+              error: `${line.product.name}: only limited stock available`,
+              code: "INSUFFICIENT_STOCK",
+            };
+            throw new Error("INSUFFICIENT_STOCK");
+          }
+        }
+      }
+
+      return tx
+        .insert(orders)
+        .values({
+          orderNumber,
+          email: String(body.email).trim(),
+          fullName: String(body.fullName).trim(),
+          phone: String(body.phone ?? "").trim(),
+          address: String(body.address ?? "").trim(),
+          city: String(body.city ?? "").trim(),
+          postalCode: String(body.postalCode ?? "").trim(),
+          country: String(body.country ?? "").trim(),
+          subtotal,
+          shipping,
+          deliveryPrice: shipping,
+          total,
+          items: orderItems,
+          status: "جديد",
+        })
+        .returning();
+    }).catch((err) => {
+      if (insertError) return null;
+      throw err;
+    });
+    const order = inserted?.[0];
+
+    if (!order) {
+      return Response.json(
+        { ok: false, error: insertError!.error, code: insertError!.code },
+        { status: 409 },
+      );
+    }
+
+    // Keep product-level totals/sold-out flags in sync after the decrement.
+    const touchedProductIds = [...new Set(merged.map((l) => l.product.id))];
+    for (const pid of touchedProductIds) {
+      try {
+        await syncProductStockFlags(pid);
+      } catch (err) {
+        console.error("[checkout] stock flag sync failed:", err);
+      }
+    }
 
     // Meta Ads tracking: one event ID shared by the browser Pixel Purchase
     // event and the server-side Conversions API event so Meta deduplicates

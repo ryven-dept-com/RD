@@ -1,11 +1,25 @@
 import { db } from "@/db";
-import { products } from "@/db/schema";
+import { productVariants, products } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyRequest } from "@/lib/admin-auth";
 import { parseProductInput } from "@/lib/admin-product-input";
+import {
+  parseVariantInputs,
+  replaceProductVariants,
+  splitStockEvenly,
+  variantOptionLists,
+} from "@/lib/product-admin";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Create a product (Phase 5).
+ * - Server-side validation for every field (auth + CSRF via verifyRequest).
+ * - Slug must be unique — collisions are rejected (400), never renamed.
+ * - Variants are validated (no duplicate size × color, non-negative stock).
+ * - When no explicit variants are sent, they are generated from the
+ *   size × color matrix with the initial stock split evenly (sum preserved).
+ */
 export async function POST(request: Request) {
   const admin = await verifyRequest(request);
   if (!admin) {
@@ -19,22 +33,75 @@ export async function POST(request: Request) {
       return Response.json({ ok: false, error: parsed.error }, { status: 400 });
     }
 
-    // ensure unique slug
+    const variantParse = parseVariantInputs(body.variants);
+    if (!variantParse.ok) {
+      return Response.json({ ok: false, error: variantParse.error }, { status: 400 });
+    }
+    let variants = variantParse.variants;
+
     const existing = await db
       .select({ id: products.id })
       .from(products)
       .where(eq(products.slug, parsed.data.slug))
       .limit(1);
     if (existing.length) {
-      parsed.data.slug = `${parsed.data.slug}-${Date.now().toString(36)}`;
+      return Response.json(
+        { ok: false, error: `Slug "${parsed.data.slug}" is already in use` },
+        { status: 400 },
+      );
     }
 
-    const [created] = await db
-      .insert(products)
-      .values(parsed.data)
-      .returning({ id: products.id });
+    // No explicit variants → derive them from the size × color matrix so the
+    // product behaves exactly like the pre-Phase-5 catalogue.
+    if (!variants.length && (parsed.data.sizes.length || parsed.data.colors.length)) {
+      const sizes = parsed.data.sizes.length ? parsed.data.sizes : [""];
+      const colors = parsed.data.colors.length ? parsed.data.colors : [""];
+      const split = splitStockEvenly(parsed.data.stock, sizes.length * colors.length);
+      let i = 0;
+      variants = sizes.flatMap((size) =>
+        colors.map((color) => ({
+          size,
+          color,
+          sku: "",
+          stock: split[i++],
+          active: true,
+        })),
+      );
+    }
 
-    return Response.json({ ok: true, id: created.id }, { status: 201 });
+    // Denormalized option lists always mirror the variant matrix.
+    const options = variantOptionLists(variants);
+    const data = {
+      ...parsed.data,
+      sizes: variants.length ? options.sizes : parsed.data.sizes,
+      colors: variants.length ? options.colors : parsed.data.colors,
+    };
+
+    const createdId = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(products).values(data).returning({ id: products.id });
+      if (variants.length) {
+        await tx.insert(productVariants).values(
+          variants.map((v, i) => ({
+            productId: created.id,
+            size: v.size,
+            color: v.color,
+            sku: v.sku,
+            stock: v.stock,
+            active: v.active,
+            position: i,
+          })),
+        );
+        // Stock total = sum of variants.
+        const total = variants.reduce((sum, v) => sum + v.stock, 0);
+        await tx
+          .update(products)
+          .set({ stock: total, soldOut: total <= 0 })
+          .where(eq(products.id, created.id));
+      }
+      return created.id;
+    });
+
+    return Response.json({ ok: true, id: createdId }, { status: 201 });
   } catch (err) {
     console.error("POST /api/admin/products failed:", err);
     return Response.json({ ok: false, error: "Server error" }, { status: 500 });

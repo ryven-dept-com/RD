@@ -5,8 +5,9 @@ import {
   deliveryZones,
   orders,
   products,
+  type Product,
 } from "@/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 export type DashboardStats = {
   totalProducts: number;
@@ -75,6 +76,77 @@ export async function getOrderById(id: number) {
 
 export async function getAllProductsAdmin() {
   return db.select().from(products).orderBy(desc(products.createdAt));
+}
+
+export type AdminProductSearch = {
+  q?: string;
+  status?: string; // draft | active | archived
+  category?: string;
+  sort?: "newest" | "oldest" | "name" | "stock-asc" | "stock-desc" | "manual";
+};
+
+export type AdminProductRow = Product & {
+  variantCount: number;
+  totalStock: number;
+};
+
+/**
+ * Server-side product search/filter/sort for the admin Products page
+ * (Phase 5). Results include variant aggregates so the table can show
+ * real stock without extra queries.
+ */
+export async function searchProductsAdmin(
+  search: AdminProductSearch = {},
+): Promise<AdminProductRow[]> {
+  const { getVariantAggregates } = await import("@/lib/product-admin");
+  const conditions = [];
+  if (search.q) {
+    const needle = search.q.trim();
+    if (needle) {
+      conditions.push(
+        sql`(${products.name} ILIKE ${`%${needle}%`} OR ${products.sku} ILIKE ${`%${needle}%`} OR ${products.slug} ILIKE ${`%${needle}%`})`,
+      );
+    }
+  }
+  if (search.status === "draft" || search.status === "active" || search.status === "archived") {
+    conditions.push(eq(products.status, search.status));
+  }
+  if (search.category) {
+    conditions.push(eq(products.category, search.category));
+  }
+
+  const rows = await db
+    .select()
+    .from(products)
+    .where(conditions.length ? and(...conditions) : undefined);
+
+  const agg = await getVariantAggregates();
+  const withAgg: AdminProductRow[] = rows.map((r) => ({
+    ...r,
+    variantCount: agg.get(r.id)?.variantCount ?? 0,
+    totalStock: agg.get(r.id)?.totalStock ?? r.stock,
+  }));
+
+  switch (search.sort) {
+    case "oldest":
+      withAgg.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      break;
+    case "name":
+      withAgg.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case "stock-asc":
+      withAgg.sort((a, b) => a.totalStock - b.totalStock);
+      break;
+    case "stock-desc":
+      withAgg.sort((a, b) => b.totalStock - a.totalStock);
+      break;
+    case "manual":
+      withAgg.sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id);
+      break;
+    default:
+      withAgg.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+  return withAgg;
 }
 
 export async function getProductByIdAdmin(id: number) {

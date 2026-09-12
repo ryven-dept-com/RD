@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getProducts, type ProductFilters } from "@/lib/queries";
+import {
+  getProducts,
+  getShopFilterOptions,
+  type ProductFilters,
+} from "@/lib/queries";
 import { ProductCard } from "@/components/product-card";
 import {
   DesktopFilters,
   MobileFilters,
+  SearchBar,
   SortSelect,
 } from "./shop-controls";
 
@@ -21,6 +26,11 @@ type SearchParams = Promise<{
   collection?: string;
   filter?: string;
   sort?: string;
+  q?: string;
+  size?: string;
+  color?: string;
+  inStock?: string;
+  maxPrice?: string;
 }>;
 
 const VALID_FILTERS = new Set(["new", "best", "sale"]);
@@ -39,6 +49,7 @@ export default async function ShopPage({
 }) {
   const sp = await searchParams;
 
+  const maxPriceRaw = Number(sp.maxPrice);
   const filters: ProductFilters = {
     category: sp.category || undefined,
     collection: sp.collection || undefined,
@@ -50,21 +61,30 @@ export default async function ShopPage({
       sp.sort && VALID_SORTS.has(sp.sort)
         ? (sp.sort as ProductFilters["sort"])
         : undefined,
+    q: sp.q?.trim() || undefined,
+    size: sp.size?.trim() || undefined,
+    color: sp.color?.trim() || undefined,
+    inStock: sp.inStock === "1" ? true : undefined,
+    maxPrice:
+      Number.isFinite(maxPriceRaw) && maxPriceRaw > 0 ? maxPriceRaw : undefined,
   };
 
   const products = await getProducts(filters);
+  const options = await getShopFilterOptions();
 
-  const heading = filters.category
-    ? filters.category
-    : filters.collection
-      ? filters.collection
-      : filters.filter === "new"
-        ? "New Arrivals"
-        : filters.filter === "best"
-          ? "Best Sellers"
-          : filters.filter === "sale"
-            ? "On Sale"
-            : "Shop All";
+  const heading = filters.q
+    ? `Search: “${filters.q}”`
+    : filters.category
+      ? filters.category
+      : filters.collection
+        ? filters.collection
+        : filters.filter === "new"
+          ? "New Arrivals"
+          : filters.filter === "best"
+            ? "Best Sellers"
+            : filters.filter === "sale"
+              ? "On Sale"
+              : "Shop All";
 
   return (
     <div className="bg-bone pt-16">
@@ -89,11 +109,14 @@ export default async function ShopPage({
       </div>
 
       <div className="mx-auto flex max-w-7xl gap-10 px-4 py-10 sm:px-6 lg:px-8">
-        <DesktopFilters />
+        <DesktopFilters options={options} />
 
         <div className="min-w-0 flex-1">
-          <div className="mb-6 flex items-center justify-between gap-4">
-            <MobileFilters />
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:flex-1">
+              <MobileFilters options={options} />
+              <SearchBar className="max-w-md flex-1" />
+            </div>
             <SortSelect resultCount={products.length} />
           </div>
 
