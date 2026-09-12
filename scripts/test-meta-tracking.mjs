@@ -645,7 +645,321 @@ async function main() {
     echo.body?.settings && !("metaCapiAccessToken" in echo.body.settings),
   );
 
-  section("10) Graceful degradation");
+  section("10) Phase 6 — category management");
+  // 10.1 Admin list + seeded categories with counts.
+  const catListRes = await jfetch(`${BASE}/api/admin/categories`, {
+    headers: adminHeaders,
+  });
+  const catList = await catListRes.json().catch(() => ({}));
+  check(
+    "admin category list returns seeded categories + counts",
+    catListRes.status === 200 &&
+      catList.ok === true &&
+      catList.count >= 6 &&
+      catList.categories.every((c) => typeof c.productCount === "number"),
+  );
+  const seededCat = catList.categories?.find((c) => c.name === "Hoodies");
+  check(
+    "seeded category kept with products associated",
+    Boolean(seededCat) && seededCat.productCount > 0,
+    JSON.stringify(seededCat ?? {}),
+  );
+
+  // 10.2 Security: auth + CSRF on category mutations.
+  const catNoAuth = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "Hax" }),
+  });
+  check("category mutation without session rejected (401)", catNoAuth.status === 401);
+  const catBadCsrf = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: { ...adminHeaders, "x-csrf-token": "f".repeat(64) },
+    body: JSON.stringify({ name: "Hax2" }),
+  });
+  check("category mutation with invalid CSRF rejected (401)", catBadCsrf.status === 401);
+
+  // 10.3 Create with SEO + media, duplicate protections, slug validation.
+  const CAT_NAME = "Phase6 Outerwear";
+  const catCreateRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: CAT_NAME,
+      description: "Integration test category.",
+      image: "https://images.pexels.com/photo/category.jpg",
+      sortOrder: 9,
+      seoTitle: "Phase6 SEO Title",
+      seoDescription: "Phase6 SEO description text.",
+    }),
+  });
+  const catCreated = await catCreateRes.json().catch(() => ({}));
+  check(
+    "create category with SEO/media fields",
+    catCreateRes.status === 201 && catCreated.ok === true,
+    JSON.stringify(catCreated),
+  );
+  const catId = catCreated.id;
+
+  const dupNameRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: CAT_NAME }),
+  });
+  check("duplicate category name rejected (409)", dupNameRes.status === 409);
+
+  const dupSlugRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: "Totally Different", slug: "phase6-outerwear" }),
+  });
+  check("duplicate category slug rejected (409)", dupSlugRes.status === 409);
+
+  const badSlugRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: "Bad Slug", slug: "---" }),
+  });
+  check("invalid slug rejected (400)", badSlugRes.status === 400);
+
+  const unsafeImgRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: "Unsafe Image", image: "javascript:alert(1)" }),
+  });
+  check("unsafe category image rejected (400)", unsafeImgRes.status === 400);
+
+  // Detail endpoint returns persisted fields.
+  const catDetail = await jfetch(`${BASE}/api/admin/categories/${catId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "category detail persists SEO/media/sort fields",
+    catDetail.ok === true &&
+      catDetail.category.seoTitle === "Phase6 SEO Title" &&
+      catDetail.category.image.includes("category.jpg") &&
+      catDetail.category.sortOrder === 9,
+  );
+
+  // 10.4 Product ↔ category: count, rename re-points products.
+  const catProdRes = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase6 Cat Product",
+      slug: "phase6-cat-product",
+      price: "50.00",
+      category: CAT_NAME,
+      sizes: "M",
+      colors: "Onyx",
+    }),
+  });
+  const catProd = await catProdRes.json().catch(() => ({}));
+  check("create product in test category", catProdRes.status === 201);
+
+  const catDetail2 = await jfetch(`${BASE}/api/admin/categories/${catId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "category product count reflects assignment",
+    catDetail2.category.productCount === 1,
+    JSON.stringify(catDetail2.category.productCount),
+  );
+
+  const CAT_RENAMED = "Phase6 Outerwear V2";
+  const catRenameRes = await jfetch(`${BASE}/api/admin/categories/${catId}`, {
+    method: "PUT",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: CAT_RENAMED,
+      slug: "phase6-outerwear",
+      description: "Integration test category.",
+      image: "https://images.pexels.com/photo/category.jpg",
+      sortOrder: 9,
+      seoTitle: "Phase6 SEO Title",
+      seoDescription: "Phase6 SEO description text.",
+    }),
+  });
+  check("rename category", catRenameRes.status === 200);
+
+  const catProdAfter = await jfetch(
+    `${BASE}/api/admin/products/${catProd.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "products re-pointed on category rename",
+    catProdAfter.product?.category === CAT_RENAMED,
+    JSON.stringify(catProdAfter.product?.category),
+  );
+  const renamedFilter = await jfetch(
+    `${BASE}/api/products?category=${encodeURIComponent(CAT_RENAMED)}`,
+  ).then((r) => r.json());
+  check(
+    "category filter finds products under renamed category",
+    renamedFilter.count === 1 && renamedFilter.products[0].slug === "phase6-cat-product",
+  );
+
+  // 10.5 Hierarchy: parent/child, self-parent, cycles, invalid parent.
+  const childRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: "Phase6 Child", parentId: catId }),
+  });
+  const childCreated = await childRes.json().catch(() => ({}));
+  check("create child category", childRes.status === 201);
+
+  const selfParentRes = await jfetch(`${BASE}/api/admin/categories/${childCreated.id}`, {
+    method: "PUT",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: "Phase6 Child", parentId: childCreated.id }),
+  });
+  check("self-parent rejected (400)", selfParentRes.status === 400);
+
+  const cycleRes = await jfetch(`${BASE}/api/admin/categories/${catId}`, {
+    method: "PUT",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: CAT_RENAMED, slug: "phase6-outerwear", parentId: childCreated.id }),
+  });
+  check("circular hierarchy rejected (400)", cycleRes.status === 400);
+
+  const badParentRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: "Bad Parent Ref", parentId: 999999 }),
+  });
+  check("invalid parent reference rejected (400)", badParentRes.status === 400);
+
+  // 10.6 Safe deletion: blocked when in use, explicit reassignment works.
+  const blockedDelete = await jfetch(`${BASE}/api/admin/categories/${catId}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  const blockedBody = await blockedDelete.json().catch(() => ({}));
+  check(
+    "delete blocked while products/children exist (409)",
+    blockedDelete.status === 409 &&
+      blockedBody.code === "CATEGORY_IN_USE" &&
+      blockedBody.productCount === 1 &&
+      blockedBody.childCount === 1,
+    JSON.stringify(blockedBody),
+  );
+
+  const childDelete = await jfetch(`${BASE}/api/admin/categories/${childCreated.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  check("delete empty child category succeeds", childDelete.status === 200);
+
+  const jacketsId = catList.categories?.find((c) => c.name === "Jackets")?.id;
+  const reassignDelete = await jfetch(
+    `${BASE}/api/admin/categories/${catId}?reassignTo=${jacketsId}`,
+    { method: "DELETE", headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "delete with explicit reassignment succeeds",
+    reassignDelete.ok === true && reassignDelete.reassignedTo === "Jackets",
+    JSON.stringify(reassignDelete),
+  );
+  const catProdReassigned = await jfetch(
+    `${BASE}/api/admin/products/${catProd.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "product reassigned instead of orphaned",
+    catProdReassigned.product?.category === "Jackets",
+    JSON.stringify(catProdReassigned.product?.category),
+  );
+
+  // 10.7 Storefront: active-only display + SEO metadata.
+  const seoCatRes = await jfetch(`${BASE}/api/admin/categories`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase6 Seo Cat",
+      seoTitle: "Phase6 SEO Landing",
+      seoDescription: "Phase6 landing description.",
+      description: "Visible category blurb.",
+    }),
+  });
+  const seoCat = await seoCatRes.json().catch(() => ({}));
+
+  const shopWithCat = await html(`/shop?category=${encodeURIComponent("Phase6 Seo Cat")}`);
+  check(
+    "category SEO title used on landing page",
+    shopWithCat.status === 200 && shopWithCat.text.includes("Phase6 SEO Landing"),
+  );
+  check(
+    "category description shown on landing page",
+    normalized(shopWithCat.text).includes("Visible category blurb"),
+  );
+  check(
+    "canonical link emitted for category landing",
+    /rel="canonical"/.test(shopWithCat.text) &&
+      normalized(shopWithCat.text).includes("category=Phase6%20Seo%20Cat"),
+  );
+
+  const shopBeforeDisable = await html("/shop");
+  check(
+    "active category listed in shop filters",
+    normalized(shopBeforeDisable.text).includes("Phase6 Seo Cat"),
+  );
+  await jfetch(`${BASE}/api/admin/categories/${seoCat.id}`, {
+    method: "PUT",
+    headers: adminHeaders,
+    body: JSON.stringify({ name: "Phase6 Seo Cat", active: false }),
+  });
+  const shopAfterDisable = await html("/shop");
+  check(
+    "disabled category hidden from shop filters",
+    !normalized(shopAfterDisable.text).includes("Phase6 Seo Cat"),
+  );
+
+  // Navbar loads categories from the database (seeded "Hoodies" visible).
+  const homeNav = await html("/");
+  check(
+    "navbar uses database categories",
+    normalized(homeNav.text).includes("/shop?category=Hoodies"),
+  );
+
+  // Existing URL schemes keep working.
+  const legacyUrl1 = await html("/shop?collection=Pants");
+  const legacyUrl2 = await html("/shop?category=Hoodies");
+  check("legacy /shop?collection= URL works", legacyUrl1.status === 200);
+  check(
+    "legacy /shop?category= URL shows the category",
+    legacyUrl2.status === 200 && legacyUrl2.text.includes("Hoodies"),
+  );
+
+  // Admin page renders with the new manager.
+  const adminCatPage = await jfetch(`${BASE}/admin/categories`, {
+    headers: { cookie: auth.cookie },
+  });
+  const adminCatHtml = await adminCatPage.text();
+  check(
+    "admin categories page renders",
+    adminCatPage.status === 200 && normalized(adminCatHtml).includes("Categories"),
+  );
+
+  // Cleanup test artefacts.
+  await jfetch(`${BASE}/api/admin/products/${catProd.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+  await jfetch(`${BASE}/api/admin/categories/${seoCat.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+
+  // Catalog regression after all category mutations.
+  const catAfterCats = await jfetch(`${BASE}/api/catalog`);
+  const csvAfterCats = await catAfterCats.text();
+  const parsedAfterCats = parseCsv(csvAfterCats);
+  check(
+    "catalog feed still valid after category changes",
+    catAfterCats.status === 200 && parsedAfterCats.length > 1,
+  );
+
+  section("11) Graceful degradation");
   await putSettings(auth, { metaPixelEnabled: "false" });
   const homeOff = await html("/");
   check(

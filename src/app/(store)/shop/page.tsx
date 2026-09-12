@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import {
+  getActiveCategoryByRef,
   getProducts,
   getShopFilterOptions,
+  getStorefrontCategories,
   type ProductFilters,
 } from "@/lib/queries";
 import { ProductCard } from "@/components/product-card";
@@ -15,11 +18,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Shop All",
-  description:
-    "Browse the full Ruven Dept. catalogue — heavyweight hoodies, tees, utility jackets, cargo pants, headwear and footwear.",
-};
+const DEFAULT_SHOP_DESCRIPTION =
+  "Browse the full Ruven Dept. catalogue — heavyweight hoodies, tees, utility jackets, cargo pants, headwear and footwear.";
 
 type SearchParams = Promise<{
   category?: string;
@@ -41,6 +41,57 @@ const VALID_SORTS = new Set([
   "price-desc",
   "rating",
 ]);
+
+/** Site origin for canonical URLs (proxied preview hosts included). */
+async function siteOrigin(): Promise<string> {
+  const h = await headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("host") ?? "localhost:3000";
+  return `${proto}://${host}`;
+}
+
+/**
+ * Phase 6: category landing pages are SEO-ready. Title/description come from
+ * the category's SEO fields (falling back to name/description); canonical
+ * points at the stable /shop?category=… URL. Global robots/index settings
+ * from the root layout still apply.
+ */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}): Promise<Metadata> {
+  const sp = await searchParams;
+
+  if (sp.category) {
+    const category = await getActiveCategoryByRef(sp.category);
+    if (category) {
+      const canonical = `${await siteOrigin()}/shop?category=${encodeURIComponent(category.name)}`;
+      return {
+        title: category.seoTitle || category.name,
+        description:
+          category.seoDescription || category.description || DEFAULT_SHOP_DESCRIPTION,
+        alternates: { canonical },
+        openGraph: {
+          title: category.seoTitle || category.name,
+          description: category.seoDescription || category.description || undefined,
+          ...(category.image ? { images: [category.image] } : {}),
+        },
+      };
+    }
+  }
+
+  if (sp.q) {
+    return { title: `Search: ${sp.q}` };
+  }
+  if (sp.collection) {
+    return {
+      title: sp.collection,
+      description: DEFAULT_SHOP_DESCRIPTION,
+    };
+  }
+  return { title: "Shop All", description: DEFAULT_SHOP_DESCRIPTION };
+}
 
 export default async function ShopPage({
   searchParams,
@@ -69,22 +120,40 @@ export default async function ShopPage({
       Number.isFinite(maxPriceRaw) && maxPriceRaw > 0 ? maxPriceRaw : undefined,
   };
 
-  const products = await getProducts(filters);
-  const options = await getShopFilterOptions();
+  const [products, filterOptions, dbCategories] = await Promise.all([
+    getProducts(filters),
+    getShopFilterOptions(),
+    getStorefrontCategories(),
+  ]);
+
+  // Filters get ACTIVE database categories/collections — no hardcoded lists.
+  const options = {
+    ...filterOptions,
+    categories: dbCategories.map((c) => c.name),
+  };
+
+  // The category landing text uses the real category record (Phase 6).
+  const activeCategory = filters.category
+    ? dbCategories.find(
+        (c) => c.name.toLowerCase() === filters.category!.toLowerCase(),
+      ) ?? null
+    : null;
 
   const heading = filters.q
     ? `Search: “${filters.q}”`
-    : filters.category
-      ? filters.category
-      : filters.collection
-        ? filters.collection
-        : filters.filter === "new"
-          ? "New Arrivals"
-          : filters.filter === "best"
-            ? "Best Sellers"
-            : filters.filter === "sale"
-              ? "On Sale"
-              : "Shop All";
+    : activeCategory
+      ? activeCategory.name
+      : filters.category
+        ? filters.category
+        : filters.collection
+          ? filters.collection
+          : filters.filter === "new"
+            ? "New Arrivals"
+            : filters.filter === "best"
+              ? "Best Sellers"
+              : filters.filter === "sale"
+                ? "On Sale"
+                : "Shop All";
 
   return (
     <div className="bg-bone pt-16">
@@ -105,6 +174,11 @@ export default async function ShopPage({
             {products.length} {products.length === 1 ? "piece" : "pieces"} — heavyweight
             construction, refined fits, built to last.
           </p>
+          {activeCategory?.description && (
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60">
+              {activeCategory.description}
+            </p>
+          )}
         </div>
       </div>
 

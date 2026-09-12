@@ -5,9 +5,10 @@ import {
   deliveryZones,
   orders,
   products,
+  type Category,
   type Product,
 } from "@/db/schema";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 export type DashboardStats = {
   totalProducts: number;
@@ -160,6 +161,35 @@ export async function getProductByIdAdmin(id: number) {
 
 export async function getAllCategories() {
   return db.select().from(categories).orderBy(categories.name);
+}
+
+export type AdminCategoryRow = Category & {
+  productCount: number;
+  childCount: number;
+};
+
+/**
+ * Phase 6: categories for the admin table with efficient grouped counts
+ * (one query per aggregate, never per-row).
+ */
+export async function getCategoriesAdmin(): Promise<AdminCategoryRow[]> {
+  const {
+    getChildCounts,
+    getProductCountsByCategory,
+  } = await import("@/lib/category-admin");
+  const [rows, productCounts, childCounts] = await Promise.all([
+    db
+      .select()
+      .from(categories)
+      .orderBy(asc(categories.sortOrder), asc(categories.name)),
+    getProductCountsByCategory(),
+    getChildCounts(),
+  ]);
+  return rows.map((c) => ({
+    ...c,
+    productCount: productCounts.get(c.name) ?? 0,
+    childCount: childCounts.get(c.id) ?? 0,
+  }));
 }
 
 /** Lightweight product list for CMS pickers (id / name / first image). */

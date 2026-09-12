@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import {
+  categories,
   productVariants,
   products,
   reviews,
@@ -158,24 +159,92 @@ export type ProductFilters = {
 export async function getShopFilterOptions(): Promise<{
   sizes: string[];
   colors: string[];
+  /** Distinct collections of ACTIVE products (Phase 6: no hardcoded list). */
+  collections: string[];
 }> {
   try {
     await ensureSeeded();
-    const rows = await db
-      .select({ size: productVariants.size, color: productVariants.color })
-      .from(productVariants)
-      .where(eq(productVariants.active, true));
+    const [variantRows, collectionRows] = await Promise.all([
+      db
+        .select({ size: productVariants.size, color: productVariants.color })
+        .from(productVariants)
+        .where(eq(productVariants.active, true)),
+      db
+        .selectDistinct({ collection: products.collection })
+        .from(products)
+        .where(and(eq(products.active, true), eq(products.status, "active"))),
+    ]);
     const sizes: string[] = [];
     const colors: string[] = [];
-    for (const r of rows) {
+    for (const r of variantRows) {
       if (r.size && !sizes.includes(r.size)) sizes.push(r.size);
       if (r.color && !colors.includes(r.color)) colors.push(r.color);
     }
-    return { sizes, colors };
+    const collections = collectionRows
+      .map((r) => r.collection)
+      .filter((c) => c.trim().length > 0);
+    return { sizes, colors, collections };
   } catch (err) {
     console.error("getShopFilterOptions failed:", err);
-    return { sizes: [], colors: [] };
+    return { sizes: [], colors: [], collections: [] };
   }
+}
+
+/** Serializable category shape for the storefront (Phase 6). */
+export type StorefrontCategory = {
+  id: number;
+  name: string;
+  slug: string;
+  description: string;
+  image: string;
+  seoTitle: string;
+  seoDescription: string;
+  parentId: number | null;
+  sortOrder: number;
+};
+
+/**
+ * Active categories for the storefront (navigation + filters), ordered by
+ * the admin-configured sort position. Disabled categories never reach the
+ * public site.
+ */
+export async function getStorefrontCategories(): Promise<StorefrontCategory[]> {
+  try {
+    await ensureSeeded();
+    const rows = await db
+      .select()
+      .from(categories)
+      .where(eq(categories.active, true))
+      .orderBy(asc(categories.sortOrder), asc(categories.name));
+    return rows.map((c) => ({
+      id: c.id,
+      name: c.name,
+      slug: c.slug,
+      description: c.description,
+      image: c.image,
+      seoTitle: c.seoTitle,
+      seoDescription: c.seoDescription,
+      parentId: c.parentId,
+      sortOrder: c.sortOrder,
+    }));
+  } catch (err) {
+    console.error("getStorefrontCategories failed:", err);
+    return [];
+  }
+}
+
+/** Find one ACTIVE category by name or slug (case-insensitive on name). */
+export async function getActiveCategoryByRef(
+  ref: string,
+): Promise<StorefrontCategory | null> {
+  if (!ref) return null;
+  const all = await getStorefrontCategories();
+  const needle = ref.trim().toLowerCase();
+  return (
+    all.find(
+      (c) => c.name.toLowerCase() === needle || c.slug === needle.toLowerCase(),
+    ) ?? null
+  );
 }
 
 export async function getProducts(

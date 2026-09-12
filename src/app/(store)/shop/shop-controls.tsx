@@ -2,7 +2,6 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, type FormEvent } from "react";
-import { CATEGORIES, COLLECTIONS } from "@/lib/seed-data";
 import { CloseIcon } from "@/components/icons";
 
 const SORTS = [
@@ -30,6 +29,10 @@ const PRICE_STEPS = [
 export type ShopFilterOptions = {
   sizes: string[];
   colors: string[];
+  /** Active category names from the database (Phase 6). */
+  categories: string[];
+  /** Distinct collections of active products (Phase 6). */
+  collections: string[];
 };
 
 export function SortSelect({ resultCount }: { resultCount: number }) {
@@ -179,7 +182,7 @@ function FilterBody({
           >
             All Products
           </button>
-          {CATEGORIES.map((c) => (
+          {options.categories.map((c) => (
             <button
               key={c}
               onClick={() => update("category", c)}
@@ -191,12 +194,13 @@ function FilterBody({
         </div>
       </div>
 
+      {options.collections.length > 0 && (
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
           Collection
         </h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          {COLLECTIONS.map((c) => (
+          {options.collections.map((c) => (
             <button
               key={c}
               onClick={() => update("collection", c)}
@@ -207,6 +211,7 @@ function FilterBody({
           ))}
         </div>
       </div>
+      )}
 
       {/* Phase 5: size */}
       {options.sizes.length > 0 && (

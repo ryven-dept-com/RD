@@ -180,6 +180,81 @@ function splitStockEvenly(total: number, n: number): number[] {
   });
 }
 
+const CATEGORY_SCHEMA_STATEMENTS = [
+  `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "description" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "image" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "sort_order" integer DEFAULT 0 NOT NULL`,
+  `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "seo_title" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "seo_description" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "parent_id" integer`,
+  `ALTER TABLE "categories" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now() NOT NULL`,
+];
+
+/**
+ * Phase 6: additive, idempotent category schema upgrade. Existing category
+ * rows keep working unchanged (new columns have safe defaults; parent_id
+ * stays null = top-level, so no hierarchy is forced on existing data).
+ */
+export async function ensureCategorySchema(db: SeedDb): Promise<void> {
+  for (const statement of CATEGORY_SCHEMA_STATEMENTS) {
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (err) {
+      if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
+    }
+  }
+  // Guard the parent reference for databases where it could not be added
+  // with a constraint originally. Tolerated if it already exists.
+  try {
+    await db.execute(sql.raw(`
+      ALTER TABLE "categories"
+      ADD CONSTRAINT "categories_parent_id_fkey"
+      FOREIGN KEY ("parent_id") REFERENCES "categories"("id")
+      ON DELETE SET NULL
+    `));
+  } catch (err) {
+    if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
+  }
+}
+
+
+/** Collect error codes from an error's full cause chain. */
+function collectErrCodes(err: unknown): string[] {
+  const codes: string[] = [];
+  let current: unknown = err;
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    const e = current as { code?: unknown; cause?: unknown };
+    if (typeof e.code === "string") codes.push(e.code);
+    current = e.cause;
+  }
+  return codes;
+}
+
+/** Collect error messages from an error's full cause chain (lowercased). */
+function collectErrMessages(err: unknown): string {
+  const messages: string[] = [];
+  let current: unknown = err;
+  for (let depth = 0; current && depth < 5; depth += 1) {
+    const e = current as { message?: unknown; cause?: unknown };
+    if (typeof e.message === "string") messages.push(e.message.toLowerCase());
+    current = e.cause;
+  }
+  return messages.join(" | ");
+}
+
+/**
+ * Tolerate "object already exists" errors by SQLSTATE when available, with a
+ * message fallback for drivers/bridges that strip the code (e.g. the local
+ * PGlite test server).
+ */
+function isAlreadyExistsErr(err: unknown, codes: string[], messages: string): boolean {
+  if (codes.some((c) => ["42P07", "42P16", "42710", "42701"].includes(c))) return true;
+  return (
+    messages.includes("already exists") &&
+    /(table|index|column|constraint)/.test(messages)
+  );
+}
+
 const PRODUCT_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "product_variants" (
     "id" serial PRIMARY KEY NOT NULL,
@@ -257,10 +332,7 @@ export async function ensureProductSchema(db: SeedDb): Promise<void> {
     try {
       await db.execute(sql.raw(statement));
     } catch (err) {
-      const e = err as { code?: string; cause?: { code?: string } };
-      const code = e.code ?? e.cause?.code;
-      // 42P07 duplicate_table / 42P16 duplicate_object / 42701 duplicate_column
-      if (code !== "42P07" && code !== "42P16" && code !== "42701") throw err;
+      if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
     }
   }
   await backfillProductVariants(db);
@@ -273,9 +345,7 @@ export async function ensureCmsSchema(db: SeedDb): Promise<void> {
     } catch (err) {
       // Concurrent instances may race on CREATE INDEX; treat "already exists"
       // as success (42P07 duplicate_table / 42P16 duplicate_object).
-      const e = err as { code?: string; cause?: { code?: string } };
-      const code = e.code ?? e.cause?.code;
-      if (code !== "42P07" && code !== "42P16") throw err;
+      if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
     }
   }
 }
@@ -557,6 +627,7 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureSchema(db);
   await ensureCmsSchema(db);
   await ensureProductSchema(db);
+  await ensureCategorySchema(db);
 
   // Top the catalogue up to the full seed set (handles empty databases and
   // partial ones left by earlier concurrent/aborted seeding attempts).

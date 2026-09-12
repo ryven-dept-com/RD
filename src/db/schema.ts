@@ -135,8 +135,16 @@ export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   slug: text("slug").notNull().unique(),
+  description: text("description").notNull().default(""),
+  image: text("image").notNull().default(""),
   active: boolean("active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  seoTitle: text("seo_title").notNull().default(""),
+  seoDescription: text("seo_description").notNull().default(""),
+  /** Optional parent for hierarchy; null = top-level. ON DELETE SET NULL. */
+  parentId: integer("parent_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
 export const deliveryZones = pgTable("delivery_zones", {
