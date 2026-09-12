@@ -3,6 +3,7 @@
 import { useT } from "@/i18n/language-context";
 
 import { useState } from "react";
+import { ImageLightbox } from "@/components/image-lightbox";
 
 export function ProductGallery({
   images,
@@ -15,6 +16,7 @@ export function ProductGallery({
 }) {
   const t = useT();
   const [active, setActive] = useState(0);
+  const [viewerOpen, setViewerOpen] = useState(false);
   const list = images.length ? images : [""];
 
   return (
@@ -42,8 +44,13 @@ export function ProductGallery({
         ))}
       </div>
 
-      {/* main image */}
-      <div className="group relative flex-1 overflow-hidden rounded-2xl bg-brand-100">
+      {/* main image — click/tap opens the fullscreen viewer */}
+      <button
+        type="button"
+        onClick={() => list[active] && setViewerOpen(true)}
+        aria-label={t("product.viewImage", { n: active + 1 })}
+        className="group relative block w-full flex-1 cursor-zoom-in overflow-hidden rounded-2xl bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+      >
         {badge && (
           <span className="absolute start-4 top-4 z-10 rounded-full bg-ink px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-bone">
             {badge}
@@ -57,7 +64,16 @@ export function ProductGallery({
             className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
           />
         </div>
-      </div>
+      </button>
+
+      {viewerOpen && (
+        <ImageLightbox
+          images={list}
+          initialIndex={active}
+          alt={name}
+          onClose={() => setViewerOpen(false)}
+        />
+      )}
     </div>
   );
 }

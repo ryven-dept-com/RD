@@ -2364,6 +2364,70 @@ async function main() {
       coBundle16.includes('"Commune"'),
   );
 
+  section("17) Product image viewer — fullscreen lightbox, zoom, keyboard");
+
+  const bundleOf = async (html) => {
+    const srcs = [...new Set(html.match(/\/_next\/static\/chunks\/[^"]+\.js/g) ?? [])];
+    let out = "";
+    for (const src of srcs.slice(0, 12)) {
+      try { out += await (await jfetch(`${BASE}${src}`)).text(); } catch {}
+    }
+    return out;
+  };
+
+  // A. Main image is an accessible trigger for the fullscreen viewer.
+  const lightPdp = await html(`/products/${slug}`);
+  check(
+    "product main image is a button that opens the image viewer",
+    lightPdp.status === 200 && lightPdp.text.includes('aria-label="View image 1"'),
+  );
+  check(
+    "BUY NOW flow untouched by the viewer (BUY NOW still present)",
+    lightPdp.text.includes("Buy now") && !lightPdp.text.includes("Add to bag"),
+  );
+
+  // B. The viewer ships real dialog + zoom controls to the client.
+  const lightBundle = await bundleOf(lightPdp.text);
+  check(
+    "lightbox uses dialog semantics (role=dialog + aria-modal)",
+    lightBundle.includes('"dialog"') && lightBundle.includes("aria-modal"),
+  );
+  check(
+    "lightbox ships accessible controls (close/prev/next/zoom labels)",
+    lightBundle.includes("Close image viewer") &&
+      lightBundle.includes("Previous image") &&
+      lightBundle.includes("Next image") &&
+      lightBundle.includes("Zoom in") &&
+      lightBundle.includes("Zoom out"),
+  );
+  check(
+    "keyboard navigation wired (Escape + ArrowLeft/ArrowRight)",
+    lightBundle.includes("Escape") &&
+      lightBundle.includes("ArrowLeft") &&
+      lightBundle.includes("ArrowRight"),
+  );
+  check(
+    "zoom is a real transform on the image (not a fake effect)",
+    lightBundle.includes("scale(") && lightBundle.includes("touch-none"),
+  );
+
+  // C. RTL Arabic keeps the viewer labels translated.
+  const lightPdpAr = await fetchHtml(`/products/${slug}`, AR.cookie);
+  check(
+    "AR product page keeps translated viewer trigger",
+    lightPdpAr.status === 200 &&
+      lightPdpAr.text.includes("عرض الصورة 1") &&
+      /<html[^>]*dir="rtl"/.test(lightPdpAr.text),
+  );
+
+  // D. Viewer does not leak into checkout, and checkout stays 4-field.
+  const coForViewer = await jfetch(`${BASE}/checkout`);
+  const coViewerHtml = await coForViewer.text();
+  check(
+    "checkout SSR unaffected by the image viewer",
+    coForViewer.status === 200 && !coViewerHtml.includes("ImageLightbox"),
+  );
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");
