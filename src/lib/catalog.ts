@@ -98,30 +98,39 @@ export function buildCatalogRows(
 ): CatalogRow[] {
   const currency = opts.currencyCode;
 
+  // Null-tolerant reads. The schema declares these NOT NULL with defaults,
+  // but a feed consumed by Meta must never 500 because ONE drifted row
+  // carries a NULL — coerce to the schema default instead.
+  const description =
+    typeof product.description === "string" ? product.description : "";
+  const images = Array.isArray(product.images) ? product.images : [];
+  const sizes = Array.isArray(product.sizes) ? product.sizes : [];
+  const colors = Array.isArray(product.colors) ? product.colors : [];
+  const priceCents = Number.isFinite(product.price) ? product.price : 0;
+  const compareCents = Number.isFinite(product.compareAtPrice ?? Number.NaN)
+    ? (product.compareAtPrice as number)
+    : null;
+
   const hasSale =
-    product.onSale &&
-    product.compareAtPrice != null &&
-    product.compareAtPrice > product.price;
+    product.onSale && compareCents != null && compareCents > priceCents;
 
   const price = hasSale
-    ? formatFeedPrice(product.compareAtPrice as number, currency)
-    : formatFeedPrice(product.price, currency);
-  const salePrice = hasSale ? formatFeedPrice(product.price, currency) : "";
+    ? formatFeedPrice(compareCents as number, currency)
+    : formatFeedPrice(priceCents, currency);
+  const salePrice = hasSale ? formatFeedPrice(priceCents, currency) : "";
 
-  const imageLink = product.images[0]
-    ? absoluteUrl(product.images[0], opts.origin)
-    : "";
+  const imageLink = images[0] ? absoluteUrl(images[0], opts.origin) : "";
 
   const activeVariants = (product.variants ?? []).filter((v) => v.active);
   const combinations: Array<{ size: string; color: string; inStock: boolean }> =
     activeVariants.length
       ? activeVariants.map((v) => ({
-          size: v.size,
-          color: v.color,
+          size: typeof v.size === "string" ? v.size : "",
+          color: typeof v.color === "string" ? v.color : "",
           inStock: v.stock > 0,
         }))
-      : (product.sizes.length ? product.sizes : [""]).flatMap((size) =>
-          (product.colors.length ? product.colors : [""]).map((color) => ({
+      : (sizes.length ? sizes : [""]).flatMap((size) =>
+          (colors.length ? colors : [""]).map((color) => ({
             size,
             color,
             inStock: !product.soldOut && product.stock > 0,
@@ -137,7 +146,7 @@ export function buildCatalogRows(
     rows.push({
       id: variantId,
       title: product.name,
-      description: product.description.trim().slice(0, 5000),
+      description: description.trim().slice(0, 5000),
       availability: combo.inStock ? "in stock" : "out of stock",
       condition: "new",
       price,

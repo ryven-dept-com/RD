@@ -56,7 +56,7 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
     events: {
       pageView: true,
       viewContent: true,
-      addToCart: true,
+      addToCart: false,
       initiateCheckout: true,
       purchase: true,
     },

@@ -18,7 +18,7 @@ export type RatingMap = Map<number, { avg: number; count: number }>;
 // relying on a manual seed step (or on the instrumentation hook timing).
 let bootstrapPromise: Promise<void> | null = null;
 
-function ensureSeeded(): Promise<void> {
+export function ensureSeeded(): Promise<void> {
   if (!bootstrapPromise) {
     bootstrapPromise = (async () => {
       try {

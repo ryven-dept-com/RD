@@ -151,3 +151,59 @@ describe("toCsv", () => {
     );
   });
 });
+
+describe("buildCatalogRows — production data shapes", () => {
+  const prodOrigin = "https://ryven-com-ten.vercel.app";
+  const dzd = { ...opts, origin: prodOrigin, currencyCode: feedCurrencyCode("دج") };
+
+  it("handles Arabic descriptions with newlines and /api/media images", () => {
+    const rows = buildCatalogRows(
+      {
+        ...baseProduct,
+        id: 100,
+        slug: "baggy-jogger",
+        name: "Baggy Jogger",
+        description:
+          "Baggy Jogger\nبتصميم واسع ومريح، مناسب للإطلالات اليومية والـ streetwear.\n\nمتوفر بالأسود، الرمادي والأزرق الكحلي.",
+        price: 250000,
+        compareAtPrice: 320000,
+        images: ["/api/media/12", "/api/media/16"],
+        onSale: true,
+        variants: [
+          { id: 1, size: "M", color: "Black", sku: "BJ-M-BLK", stock: 5, active: true },
+          { id: 2, size: "L", color: "Grey", sku: "BJ-L-GRY", stock: 0, active: true },
+        ],
+      },
+      dzd,
+    );
+    const csv = toCsv(CATALOG_COLUMNS, rows);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].price).toBe("3200.00 DZD");
+    expect(rows[0].sale_price).toBe("2500.00 DZD");
+    expect(rows[0].image_link).toBe(`${prodOrigin}/api/media/12`);
+    expect(rows[1].availability).toBe("out of stock");
+    // Newlines must never survive into a CSV field.
+    expect(csv).not.toContain("\n\n");
+  });
+
+  it("is resilient to NULL-ish drifted fields (never throws)", () => {
+    const rows = buildCatalogRows(
+      {
+        ...baseProduct,
+        id: 102,
+        slug: "drifted",
+        description: undefined as unknown as string,
+        images: null as unknown as string[],
+        sizes: null as unknown as string[],
+        colors: null as unknown as string[],
+        price: Number.NaN,
+        compareAtPrice: Number.NaN,
+      },
+      dzd,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].description).toBe("");
+    expect(rows[0].image_link).toBe("");
+    expect(rows[0].price).toBe("0.00 DZD");
+  });
+});

@@ -64,7 +64,7 @@ export const SETTING_DEFS: Record<string, SettingDef> = {
   metaPixelEnabled: { kind: "bool", defaultValue: "false", label: "Meta Pixel enabled" },
   pixelEventPageView: { kind: "bool", defaultValue: "true", label: "PageView event" },
   pixelEventViewContent: { kind: "bool", defaultValue: "true", label: "ViewContent event" },
-  pixelEventAddToCart: { kind: "bool", defaultValue: "true", label: "AddToCart event" },
+  pixelEventAddToCart: { kind: "bool", defaultValue: "false", label: "AddToCart event" },
   pixelEventInitiateCheckout: { kind: "bool", defaultValue: "true", label: "InitiateCheckout event" },
   pixelEventPurchase: { kind: "bool", defaultValue: "true", label: "Purchase event" },
 

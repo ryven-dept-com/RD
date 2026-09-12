@@ -381,6 +381,23 @@ const PRODUCT_SCHEMA_STATEMENTS = [
   `ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "sku" text DEFAULT '' NOT NULL`,
   `ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "status" text DEFAULT 'active' NOT NULL`,
   `ALTER TABLE "products" ADD COLUMN IF NOT EXISTS "sort_order" integer DEFAULT 0 NOT NULL`,
+  // Self-heal drifted rows: the schema declares these NOT NULL with empty
+  // defaults, so a NULL can only appear through out-of-band writes. Restore
+  // the schema default instead of letting one bad row break feeds/pages.
+  `UPDATE "products" SET
+     "images" = COALESCE("images", '[]'::jsonb),
+     "sizes" = COALESCE("sizes", '[]'::jsonb),
+     "colors" = COALESCE("colors", '[]'::jsonb),
+     "details" = COALESCE("details", '[]'::jsonb),
+     "description" = COALESCE("description", ''),
+     "tagline" = COALESCE("tagline", '')
+   WHERE "images" IS NULL OR "sizes" IS NULL OR "colors" IS NULL
+      OR "details" IS NULL OR "description" IS NULL OR "tagline" IS NULL`,
+  `UPDATE "product_variants" SET
+     "size" = COALESCE("size", ''),
+     "color" = COALESCE("color", ''),
+     "sku" = COALESCE("sku", '')
+   WHERE "size" IS NULL OR "color" IS NULL OR "sku" IS NULL`,
 ];
 
 /**
@@ -624,7 +641,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   metaPixelEnabled: "false",
   pixelEventPageView: "true",
   pixelEventViewContent: "true",
-  pixelEventAddToCart: "true",
+  pixelEventAddToCart: "false",
   pixelEventInitiateCheckout: "true",
   pixelEventPurchase: "true",
   // --- Phase 4 (Meta Ads & Conversions). Additive only.
