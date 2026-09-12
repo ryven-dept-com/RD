@@ -238,6 +238,12 @@ const en: Dictionary = {
   "notFound.text": "This page took a different route. Let's get you back.",
   "notFound.backHome": "Back home",
   "common.error": "Something went wrong. Please try again.",
+
+  // Admin — Products (public product link)
+  "admin.products.linkLabel": "Product Link",
+  "admin.products.copyLink": "Copy Link",
+  "admin.products.open": "Open",
+  "admin.products.copied": "Copied",
 };
 
 const fr: Dictionary = {
@@ -432,6 +438,12 @@ const fr: Dictionary = {
   "notFound.text": "Cette page a pris un autre chemin. Revenons à l'accueil.",
   "notFound.backHome": "Retour à l'accueil",
   "common.error": "Une erreur est survenue. Veuillez réessayer.",
+
+  // Admin — Products (public product link)
+  "admin.products.linkLabel": "Lien du produit",
+  "admin.products.copyLink": "Copier le lien",
+  "admin.products.open": "Ouvrir",
+  "admin.products.copied": "Copié",
 };
 
 const ar: Dictionary = {
@@ -626,6 +638,12 @@ const ar: Dictionary = {
   "notFound.text": "هذه الصفحة سلكت طريقًا مختلفًا. لنعد بك إلى الرئيسية.",
   "notFound.backHome": "العودة للرئيسية",
   "common.error": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+
+  // Admin — Products (public product link)
+  "admin.products.linkLabel": "رابط المنتج",
+  "admin.products.copyLink": "نسخ الرابط",
+  "admin.products.open": "فتح",
+  "admin.products.copied": "تم النسخ",
 };
 
 export const TRANSLATIONS: Record<Locale, Dictionary> = { en, fr, ar };

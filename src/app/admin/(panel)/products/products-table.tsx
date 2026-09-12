@@ -1,10 +1,29 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAdmin } from "@/context/admin-context";
+import { useT } from "@/i18n/language-context";
 import { formatDZD } from "@/lib/admin-format";
+import {
+  copyTextToClipboard,
+  getSiteBaseUrl,
+  normalizeSiteBaseUrl,
+  productPublicUrl,
+  safeOpenHref,
+} from "@/lib/site-url";
+
+// The origin never changes during a session, so a no-op subscription is
+// enough for useSyncExternalStore (the sanctioned way to read a browser-only
+// value without hydration mismatches or setState-in-effect).
+const subscribeNoop = () => () => {};
+function getClientSiteBase(): string {
+  return getSiteBaseUrl() || normalizeSiteBaseUrl(window.location.origin);
+}
+function getServerSiteBase(): string {
+  return getSiteBaseUrl();
+}
 
 type Row = {
   id: number;
@@ -44,6 +63,35 @@ export function ProductsTable({ products }: { products: Row[] }) {
   const [query, setQuery] = useState(params.get("q") ?? "");
   const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState<number | null>(null);
+
+  const t = useT();
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    },
+    [],
+  );
+
+  // Public site base URL — centralized in src/lib/site-url.ts. Comes from
+  // NEXT_PUBLIC_SITE_URL / VERCEL_URL; when neither is configured (local
+  // dev) we fall back to the current origin after hydration, which IS the
+  // storefront. Never an admin path, never a hardcoded domain.
+  const siteBase = useSyncExternalStore(
+    subscribeNoop,
+    getClientSiteBase,
+    getServerSiteBase,
+  );
+
+  const copyLink = async (id: number, url: string) => {
+    if (!siteBase) return;
+    const ok = await copyTextToClipboard(url);
+    if (!ok) return;
+    setCopiedId(id);
+    if (copyTimer.current) clearTimeout(copyTimer.current);
+    copyTimer.current = setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const status = params.get("status") ?? "";
   const category = params.get("category") ?? "";
@@ -146,18 +194,29 @@ export function ProductsTable({ products }: { products: Row[] }) {
               <th className="px-4 py-3 font-medium">Price</th>
               <th className="px-4 py-3 font-medium">Stock</th>
               <th className="px-4 py-3 font-medium">Flags</th>
+              <th className="px-4 py-3 font-medium">
+                {t("admin.products.linkLabel")}
+              </th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                   No products found.
                 </td>
               </tr>
             ) : (
-              pageRows.map((p) => (
+              pageRows.map((p) => {
+                // Public product link: existing DB slug + existing
+                // /products/[slug] route. Draft/archived rows keep their
+                // normal storefront behavior (the route 404s them) — the
+                // admin link never bypasses product-status logic.
+                const productUrl = productPublicUrl(p.slug, siteBase);
+                const productHref = safeOpenHref(productUrl);
+                const copied = copiedId === p.id;
+                return (
                 <tr
                   key={p.id}
                   className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
@@ -233,6 +292,46 @@ export function ProductsTable({ products }: { products: Row[] }) {
                     </div>
                   </td>
                   <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1.5">
+                      <span
+                        className="max-w-[240px] truncate text-xs text-slate-500"
+                        dir="ltr"
+                        title={productUrl}
+                      >
+                        {siteBase ? productUrl : `/products/${p.slug}`}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => copyLink(p.id, productUrl)}
+                          disabled={!siteBase}
+                          aria-live="polite"
+                          aria-label={`${t("admin.products.copyLink")} — ${p.name}`}
+                          className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${
+                            copied
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 text-slate-700 hover:bg-slate-50"
+                          } disabled:opacity-50`}
+                        >
+                          {copied
+                            ? t("admin.products.copied")
+                            : t("admin.products.copyLink")}
+                        </button>
+                        {productHref ? (
+                          <a
+                            href={productHref}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`${t("admin.products.open")} — ${p.name}`}
+                            className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                          >
+                            {t("admin.products.open")}
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-2">
                       <Link
                         href={`/admin/products/${p.id}`}
@@ -250,7 +349,8 @@ export function ProductsTable({ products }: { products: Row[] }) {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
