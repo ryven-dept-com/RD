@@ -2428,6 +2428,195 @@ async function main() {
     coForViewer.status === 200 && !coViewerHtml.includes("ImageLightbox"),
   );
 
+  section("18) Phase 10 final audit — analytics, checkout authority, concurrency");
+
+  // A. Analytics page is admin-only and renders real-data KPIs.
+  const analyticsNoAuth = await jfetch(`${BASE}/admin/analytics`, {
+    redirect: "manual",
+  });
+  check(
+    "analytics page requires admin auth (redirects to login)",
+    [302, 307].includes(analyticsNoAuth.status) &&
+      (analyticsNoAuth.headers.get("location") ?? "").includes("/admin/login"),
+    JSON.stringify({ status: analyticsNoAuth.status }),
+  );
+
+  const analyticsPage = await jfetch(`${BASE}/admin/analytics`, {
+    headers: { cookie: auth.cookie },
+  });
+  const analyticsHtml = await analyticsPage.text();
+  check(
+    "analytics dashboard renders KPIs + range filters for the admin",
+    analyticsPage.status === 200 &&
+      analyticsHtml.includes("Total Revenue") &&
+      analyticsHtml.includes("Average Order Value") &&
+      analyticsHtml.includes("Products Sold") &&
+      analyticsHtml.includes("Last 7 days") &&
+      analyticsHtml.includes("All time"),
+    JSON.stringify({ status: analyticsPage.status }),
+  );
+
+  const analyticsToday = await jfetch(`${BASE}/admin/analytics?range=today`, {
+    headers: { cookie: auth.cookie },
+  });
+  const analyticsAll = await jfetch(`${BASE}/admin/analytics?range=all`, {
+    headers: { cookie: auth.cookie },
+  });
+  check(
+    "analytics time filters respond (today + all time)",
+    analyticsToday.status === 200 && analyticsAll.status === 200,
+  );
+
+  // B. Analytics reflect REAL orders created earlier in this run.
+  check(
+    "analytics show real order data (wilaya snapshot from earlier orders)",
+    analyticsHtml.includes("المسيلة") &&
+      analyticsHtml.includes("Orders by status") &&
+      analyticsHtml.includes("Purchase funnel"),
+  );
+  check(
+    "funnel is honest: upstream stages flagged as not stored server-side",
+    analyticsHtml.includes("Not stored server-side") &&
+      analyticsHtml.includes("Meta Events Manager"),
+  );
+
+  // C. Checkout remains server-authoritative against manipulated payloads.
+  const tamperVariant = i18nVariant;
+  const tampered = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fullName: "Tamper Tester",
+      phone: "+213555000031",
+      commune: "Hammam Dalaa",
+      deliveryZone: 28,
+      deliveryMethod: "home",
+      shipping: 0,
+      total: 1,
+      items: [
+        {
+          slug,
+          size: tamperVariant.size,
+          color: tamperVariant.color,
+          quantity: 1,
+          variantId: tamperVariant.id,
+          sku: tamperVariant.sku,
+          price: 1,
+        },
+      ],
+    }),
+  }).then((r) => r.json());
+  const tamperQuote = await jfetch(
+    `${BASE}/api/delivery/quote?zone=28&method=home&subtotal=${tampered.subtotal}`,
+  ).then((r) => r.json());
+  check(
+    "client-supplied price/shipping/total are ignored (server recomputes)",
+    tampered.ok === true &&
+      tampered.subtotal > 1 &&
+      tampered.shipping === tamperQuote.quote.shipping &&
+      tampered.total === tampered.subtotal + tampered.shipping,
+    JSON.stringify({ subtotal: tampered.subtotal, shipping: tampered.shipping }),
+  );
+  check(
+    "tamper-test order still snapshots ISO DZD currency",
+    tampered.currency === "DZD",
+  );
+
+  // D. Oversell safety: a 1-stock variant sells exactly once. The checkout guard
+  // is a conditional UPDATE (SET stock = stock - qty WHERE stock >= qty) inside a
+  // single transaction — the canonical row-lock pattern that serializes truly
+  // concurrent buyers on real Postgres. The embedded PGlite test DB cannot
+  // emulate concurrent transaction isolation, so the guard is verified here with
+  // a deterministic sequential double-purchase of the same single unit.
+  const P10_SLUG = "phase10-concurrency-hoodie";
+  const p10Create = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase10 Concurrency Hoodie",
+      slug: P10_SLUG,
+      sku: "P10-HOODIE",
+      description: "Created by the Phase 10 integration suite.",
+      price: "55.00",
+      category: "Hoodies",
+      sizes: "M",
+      colors: "Onyx",
+      variants: [
+        { size: "M", color: "Onyx", sku: "P10-M-ONYX", stock: 1, active: true },
+      ],
+    }),
+  }).then((r) => r.json());
+  check("create phase10 concurrency product", p10Create.ok === true);
+  const p10Detail = await jfetch(`${BASE}/api/admin/products/${p10Create.id}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const p10Variant = p10Detail.variants.find((v) => v.sku === "P10-M-ONYX");
+  check("phase10 variant has exactly 1 unit", p10Variant?.stock === 1);
+
+  const racePayload = {
+    fullName: "Race Buyer",
+    phone: "+213555000032",
+    commune: "Hammam Dalaa",
+    deliveryZone: 28,
+    deliveryMethod: "home",
+    items: [
+      {
+        slug: P10_SLUG,
+        size: "M",
+        color: "Onyx",
+        quantity: 1,
+        variantId: p10Variant.id,
+        sku: p10Variant.sku,
+      },
+    ],
+  };
+  const readP10Stock = async () => {
+    const detail = await jfetch(`${BASE}/api/admin/products/${p10Create.id}`, {
+      headers: adminHeaders,
+    }).then((r) => r.json());
+    return detail.variants.find((v) => v.id === p10Variant.id)?.stock;
+  };
+  // First purchase wins the single unit and decrements stock to zero.
+  const buy1 = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(racePayload),
+  }).then((r) => r.json());
+  const buy1Stock = await readP10Stock();
+  check(
+    "first purchase of the last unit succeeds and decrements stock to 0",
+    buy1.ok === true && buy1Stock === 0,
+    JSON.stringify({ ok: buy1.ok, stock: buy1Stock }),
+  );
+  // Second purchase of the same unit must be rejected (no oversell).
+  const buy2 = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(racePayload),
+  }).then((r) => r.json());
+  check(
+    "second purchase of the sold-out unit rejected with INSUFFICIENT_STOCK",
+    buy2.ok === false && buy2.code === "INSUFFICIENT_STOCK",
+    JSON.stringify(buy2),
+  );
+  // Stock stays at exactly zero: never negative, decremented exactly once.
+  const finalStock = await readP10Stock();
+  check(
+    "stock lands exactly at zero (never negative, never double-decremented)",
+    finalStock === 0,
+    JSON.stringify({ stock: finalStock }),
+  );
+
+  // E. Meta guards hold at the end of the full suite.
+  const finalCatalog = await jfetch(`${BASE}/api/catalog`);
+  const finalCatalogText = await finalCatalog.text();
+  check(
+    "catalog still machine-readable DZD at final audit",
+    finalCatalog.status === 200 &&
+      finalCatalogText.includes(" DZD") &&
+      !/"\d[\d ]*,\d{2} DA"/.test(finalCatalogText),
+  );
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");
