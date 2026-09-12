@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getOrderById } from "@/lib/admin-queries";
+import { getOrderDetailAdmin } from "@/lib/order-admin";
+import { ORDER_TRANSITIONS } from "@/lib/order-admin";
 import { formatDZD, formatDateTime } from "@/lib/admin-format";
-import { OrderStatusUpdater } from "./status-updater";
+import { OrderActions } from "./order-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +18,25 @@ export default async function OrderViewPage({
   const orderId = Number(id);
   if (!Number.isFinite(orderId)) notFound();
 
-  const order = await getOrderById(orderId);
-  if (!order) notFound();
+  const detail = await getOrderDetailAdmin(orderId);
+  if (!detail) notFound();
+  const { order, notes, events } = detail;
 
-  const rows: [string, string][] = [
-    ["Customer", order.fullName],
-    ["Phone", order.phone || "—"],
+  const deliveryFee = order.deliveryPrice || order.shipping;
+  const currency = order.currency || "";
+
+  const customerRows: [string, string][] = [
+    ["Name", order.fullName],
     ["Email", order.email || "—"],
-    ["Wilaya", order.wilaya || "—"],
-    ["Commune", order.commune || order.city || "—"],
+    ["Phone", order.phone || "—"],
+  ];
+  const shippingRows: [string, string][] = [
     ["Address", order.address || "—"],
-    ["Order date", formatDateTime(order.createdAt)],
+    ["City", order.city || "—"],
+    ["Wilaya", order.wilaya || "—"],
+    ["Commune", order.commune || "—"],
+    ["Postal code", order.postalCode || "—"],
+    ["Country", order.country || "—"],
   ];
 
   return (
@@ -43,11 +52,15 @@ export default async function OrderViewPage({
           <h1 className="mt-2 text-2xl font-bold text-slate-900">
             Order {order.orderNumber}
           </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Created {formatDateTime(order.createdAt)} · Last updated{" "}
+            {formatDateTime(order.updatedAt)}
+          </p>
         </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* items + totals */}
+        {/* items + totals + customer + shipping */}
         <div className="space-y-6 lg:col-span-2">
           <div className="rounded-2xl border border-slate-200 bg-white">
             <h2 className="border-b border-slate-200 px-5 py-4 font-semibold text-slate-900">
@@ -66,18 +79,27 @@ export default async function OrderViewPage({
                       />
                     ) : null}
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-slate-900">{item.name}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium text-slate-900">
+                      {item.name}
+                    </p>
                     <p className="text-xs text-slate-500">
-                      {item.color} · {item.size} · Qty {item.quantity}
+                      {item.color || "—"} · {item.size || "—"} · Qty{" "}
+                      {item.quantity}
                     </p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {formatDZD(item.price)} each
+                      {item.sku || `#${item.productId}`}
+                      {item.variantId ? ` · variant ${item.variantId}` : ""}
                     </p>
                   </div>
-                  <span className="self-center font-medium tabular-nums text-slate-900">
-                    {formatDZD(item.price * item.quantity)}
-                  </span>
+                  <div className="text-right">
+                    <p className="text-xs text-slate-400">
+                      {formatDZD(item.price)} each
+                    </p>
+                    <p className="font-medium tabular-nums text-slate-900">
+                      {formatDZD(item.price * item.quantity)}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -88,43 +110,80 @@ export default async function OrderViewPage({
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Delivery</span>
-                <span className="tabular-nums">
-                  {formatDZD(order.deliveryPrice || order.shipping)}
-                </span>
+                <span className="tabular-nums">{formatDZD(deliveryFee)}</span>
               </div>
               <div className="flex justify-between border-t border-slate-100 pt-2 text-base font-semibold text-slate-900">
-                <span>Total</span>
+                <span>Total {currency && `(${currency})`}</span>
                 <span className="tabular-nums">{formatDZD(order.total)}</span>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* customer + status */}
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-4 font-semibold text-slate-900">Status</h2>
-            <OrderStatusUpdater orderId={order.id} current={order.status} />
-          </div>
-
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-4 font-semibold text-slate-900">
-              Customer & delivery
-            </h2>
-            <dl className="space-y-3 text-sm">
-              {rows.map(([label, value]) => (
-                <div key={label}>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="mb-4 font-semibold text-slate-900">Customer</h2>
+              <dl className="space-y-3 text-sm">
+                {customerRows.map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">
+                      {label}
+                    </dt>
+                    <dd className="break-words text-slate-800" dir="auto">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <h2 className="mb-4 font-semibold text-slate-900">Shipping</h2>
+              <dl className="space-y-3 text-sm">
+                {shippingRows.map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-xs uppercase tracking-wide text-slate-400">
+                      {label}
+                    </dt>
+                    <dd className="break-words text-slate-800" dir="auto">
+                      {value}
+                    </dd>
+                  </div>
+                ))}
+                <div>
                   <dt className="text-xs uppercase tracking-wide text-slate-400">
-                    {label}
+                    Delivery fee
                   </dt>
-                  <dd className="text-slate-800" dir="auto">
-                    {value}
+                  <dd className="tabular-nums text-slate-800">
+                    {formatDZD(deliveryFee)}
                   </dd>
                 </div>
-              ))}
-            </dl>
+              </dl>
+            </div>
           </div>
         </div>
+
+        {/* status/payment controls + notes + audit trail */}
+        <OrderActions
+          orderId={order.id}
+          status={order.status}
+          paymentStatus={order.paymentStatus}
+          stockRestored={order.stockRestored}
+          validNext={[...(ORDER_TRANSITIONS[order.status] ?? [])]}
+          notes={notes.map((n) => ({
+            id: n.id,
+            author: n.author,
+            body: n.body,
+            createdAt: n.createdAt.toISOString(),
+          }))}
+          events={events.map((e) => ({
+            id: e.id,
+            kind: e.kind,
+            fromValue: e.fromValue,
+            toValue: e.toValue,
+            actor: e.actor,
+            note: e.note,
+            createdAt: e.createdAt.toISOString(),
+          }))}
+        />
       </div>
     </div>
   );

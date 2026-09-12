@@ -967,6 +967,457 @@ async function main() {
     /"pixel":\{"enabled":false/.test(normalized(homeOff.text)),
   );
 
+  section("12) Phase 7 — professional order management");
+
+  // 12.0 Dedicated test product with a single variant so stock assertions
+  // are isolated from the rest of the catalogue.
+  const P7_SLUG = "phase7-order-jacket";
+  const p7Create = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase7 Order Jacket",
+      slug: P7_SLUG,
+      sku: "P7-JACKET",
+      description: "Created by the Phase 7 integration suite.",
+      price: "70.00",
+      category: "Jackets",
+      sizes: "M",
+      colors: "Onyx",
+      variants: [
+        { size: "M", color: "Onyx", sku: "P7-M-ONYX", stock: 4, active: true },
+      ],
+    }),
+  }).then((r) => r.json());
+  check("create phase7 product", p7Create.ok === true);
+  const p7Detail = await jfetch(
+    `${BASE}/api/admin/products/${p7Create.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const p7Variant = p7Detail.variants.find((v) => v.size === "M");
+
+  // 12.1 Checkout creates the order and decrements stock (Phase 5 behaviour
+  // preserved — Phase 7 only adds payment snapshots).
+  const p7Buy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "phase7@test.local",
+      fullName: "Phase Seven Tester",
+      address: "7 Order Street",
+      city: "Msila",
+      postalCode: "28000",
+      country: "Algeria",
+      phone: "+213555000007",
+      items: [
+        {
+          slug: P7_SLUG,
+          size: "M",
+          color: "Onyx",
+          quantity: 2,
+          variantId: p7Variant.id,
+          sku: "P7-M-ONYX",
+        },
+      ],
+    }),
+  }).then((r) => r.json());
+  check("phase7 checkout creates order", p7Buy.ok === true, JSON.stringify(p7Buy));
+
+  const p7List = await jfetch(
+    `${BASE}/api/admin/orders?q=${encodeURIComponent(p7Buy.orderNumber)}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const p7Order = p7List.orders?.[0];
+  check(
+    "order searchable by order number",
+    p7List.ok === true &&
+      p7List.total === 1 &&
+      p7Order?.orderNumber === p7Buy.orderNumber,
+    JSON.stringify(p7List),
+  );
+  check(
+    "new order defaults to pending payment (COD)",
+    p7Order?.paymentStatus === "pending" && p7Order?.itemCount === 2,
+  );
+
+  const p7ByName = await jfetch(
+    `${BASE}/api/admin/orders?q=${encodeURIComponent("Phase Seven Tester")}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const p7ByPhone = await jfetch(
+    `${BASE}/api/admin/orders?q=${encodeURIComponent("+213555000007")}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const p7ByNope = await jfetch(
+    `${BASE}/api/admin/orders?q=zzzz-no-such-order`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "search by name / phone works; no-match returns empty",
+    p7ByName.orders.some((o) => o.id === p7Order.id) &&
+      p7ByPhone.orders.some((o) => o.id === p7Order.id) &&
+      p7ByNope.total === 0,
+  );
+  const p7StatusFilter = await jfetch(
+    `${BASE}/api/admin/orders?status=${encodeURIComponent("جديد")}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "status filter returns matching orders",
+    p7StatusFilter.ok === true &&
+      p7StatusFilter.orders.every((o) => o.status === "جديد") &&
+      p7StatusFilter.orders.some((o) => o.id === p7Order.id),
+  );
+
+  // 12.2 Server-side pagination + sorting.
+  const page1 = await jfetch(`${BASE}/api/admin/orders?pageSize=1&page=1`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const page2 = await jfetch(`${BASE}/api/admin/orders?pageSize=1&page=2`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "pagination returns one row per page with distinct orders",
+    page1.orders.length === 1 &&
+      page2.orders.length === 1 &&
+      page1.orders[0].id !== page2.orders[0].id &&
+      page1.total > 1,
+    JSON.stringify({ p1: page1.total, ids: [page1.orders[0]?.id, page2.orders[0]?.id] }),
+  );
+  const hugePage = await jfetch(`${BASE}/api/admin/orders?pageSize=9999`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check("pageSize clamped to 50", hugePage.pageSize === 50);
+  const badPage = await jfetch(`${BASE}/api/admin/orders?page=-3`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check("invalid page number clamps to 1", badPage.page === 1);
+  const sorted = await jfetch(`${BASE}/api/admin/orders?sort=total-desc`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const totals = sorted.orders.map((o) => o.total);
+  check(
+    "sort=total-desc orders rows by total",
+    totals.every((t, i) => i === 0 || totals[i - 1] >= t),
+  );
+
+  // 12.3 Order detail carries immutable snapshots.
+  const p7DetailRes = await jfetch(
+    `${BASE}/api/admin/orders/${p7Order.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const p7Full = p7DetailRes.order;
+  check(
+    "detail returns item snapshots (sku + variant + unit price)",
+    p7DetailRes.ok === true &&
+      p7Full.items[0].sku === "P7-M-ONYX" &&
+      p7Full.items[0].variantId === p7Variant.id &&
+      p7Full.items[0].quantity === 2,
+  );
+  check(
+    "totals consistent and COD/payment snapshots present",
+    p7Full.total === p7Full.subtotal + p7Full.shipping &&
+      p7Full.paymentMethod === "cod",
+  );
+  check(
+    "stock not yet restored + audit trail empty",
+    p7Full.stockRestored === false && p7DetailRes.events.length === 0,
+  );
+
+  // 12.4 Server-side lifecycle validation.
+  const badMove = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "تم التسليم" }),
+  });
+  const badMoveBody = await badMove.json();
+  check(
+    "illegal transition rejected (409)",
+    badMove.status === 409 && badMoveBody.code === "INVALID_TRANSITION",
+    JSON.stringify(badMoveBody),
+  );
+  const badStatus = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "nonsense" }),
+  });
+  check("unknown status rejected (400)", badStatus.status === 400);
+  const badPayment = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ paymentStatus: "charged" }),
+  });
+  check("unknown payment status rejected (400)", badPayment.status === 400);
+  const missing = await jfetch(`${BASE}/api/admin/orders/999999`, {
+    headers: adminHeaders,
+  });
+  check("unknown order id rejected (404)", missing.status === 404);
+
+  // 12.5 Valid forward moves + explicit override.
+  const toConfirmed = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "تم التأكيد" }),
+  }).then((r) => r.json());
+  const toProcessing = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "قيد التحضير" }),
+  }).then((r) => r.json());
+  check(
+    "forward lifecycle accepted (pending → confirmed → processing)",
+    toConfirmed.ok === true && toProcessing.ok === true,
+  );
+  const skipShipped = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "تم التسليم" }),
+  });
+  check("skip to delivered rejected without override (409)", skipShipped.status === 409);
+  const forced = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "تم التسليم", force: true }),
+  }).then((r) => r.json());
+  check("explicit force override accepted", forced.ok === true);
+
+  // 12.6 Refund restores stock exactly once.
+  const cancelAfterDelivery = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "ملغى" }),
+  });
+  check("cancel after delivery rejected (409)", cancelAfterDelivery.status === 409);
+
+  const afterDecrement = await jfetch(
+    `${BASE}/api/admin/products/${p7Create.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const vBefore = afterDecrement.variants.find((v) => v.id === p7Variant.id);
+  check("variant stock still decremented before refund", vBefore?.stock === 2);
+
+  const refund = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "مرجع" }),
+  }).then((r) => r.json());
+  const afterRefund = await jfetch(
+    `${BASE}/api/admin/products/${p7Create.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const vAfter = afterRefund.variants.find((v) => v.id === p7Variant.id);
+  check(
+    "refund restores exact variant stock once",
+    refund.ok === true && refund.stockRestored === true && vAfter?.stock === 4,
+    JSON.stringify({ refund, vAfter }),
+  );
+  check(
+    "product stock re-synced after restore",
+    afterRefund.product.stock === 4 && afterRefund.product.soldOut === false,
+  );
+
+  // 12.7 No double restoration, ever.
+  const forceCancel = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "ملغى", force: true }),
+  }).then((r) => r.json());
+  const afterForceCancel = await jfetch(
+    `${BASE}/api/admin/products/${p7Create.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const vAfterCancel = afterForceCancel.variants.find((v) => v.id === p7Variant.id);
+  check(
+    "forced move out of refunded does NOT restock again",
+    forceCancel.ok === true && vAfterCancel?.stock === 4,
+  );
+  const refundedDetail = await jfetch(
+    `${BASE}/api/admin/orders/${p7Order.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const stockEvents = refundedDetail.events.filter((e) => e.kind === "stock");
+  check(
+    "stock-restoration event recorded exactly once",
+    refundedDetail.order.stockRestored === true && stockEvents.length === 1,
+  );
+  const noOp = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "ملغى" }),
+  }).then((r) => r.json());
+  check("same-status PATCH is an idempotent no-op", noOp.ok === true && noOp.unchanged === true);
+
+  // 12.8 Payment status is separate from fulfillment.
+  const pay = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ paymentStatus: "paid" }),
+  }).then((r) => r.json());
+  const paidList = await jfetch(
+    `${BASE}/api/admin/orders?payment=paid&q=${encodeURIComponent(p7Buy.orderNumber)}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "payment status updated and filterable",
+    pay.ok === true &&
+      paidList.total === 1 &&
+      paidList.orders[0].paymentStatus === "paid",
+  );
+
+  // 12.9 Internal notes + audit trail.
+  const noteEmpty = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}/notes`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ body: "   " }),
+  });
+  check("empty note rejected (400)", noteEmpty.status === 400);
+  const noteLong = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}/notes`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ body: "x".repeat(2001) }),
+  });
+  check("oversized note rejected (400)", noteLong.status === 400);
+  const noteAdd = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}/notes`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ body: "Customer asked for gift wrap." }),
+  });
+  const noteBody = await noteAdd.json();
+  check(
+    "note created with author + timestamp",
+    noteAdd.status === 201 &&
+      noteBody.note?.body === "Customer asked for gift wrap." &&
+      Boolean(noteBody.note?.author) &&
+      Boolean(noteBody.note?.createdAt),
+    JSON.stringify(noteBody),
+  );
+  const notesList = await jfetch(
+    `${BASE}/api/admin/orders/${p7Order.id}/notes`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "notes listed for the order",
+    notesList.ok === true &&
+      notesList.notes.length === 1 &&
+      notesList.notes[0].author === noteBody.note.author,
+  );
+
+  // 12.10 Security: admin + CSRF required everywhere; nothing public.
+  const noAuthList = await jfetch(`${BASE}/api/admin/orders`);
+  const noCsrfPatch = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: auth.cookie,
+    },
+    body: JSON.stringify({ status: "ملغى" }),
+  });
+  const noAuthNote = await jfetch(`${BASE}/api/admin/orders/${p7Order.id}/notes`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ body: "evil" }),
+  });
+  check(
+    "order endpoints require admin session + CSRF (401)",
+    noAuthList.status === 401 &&
+      noCsrfPatch.status === 401 &&
+      noAuthNote.status === 401,
+  );
+
+  // 12.11 Legacy orders (created before Phase 7) keep working.
+  const { Client } = require("pg");
+  const legacyClient = new Client({ connectionString: databaseUrl });
+  await legacyClient.connect();
+  const legacyInsert = await legacyClient.query(
+    `INSERT INTO orders (order_number, email, full_name, phone, address,
+       subtotal, shipping, total, items, status)
+     VALUES ($1, $2, $3, $4, $5, $6, 0, $6, $7::jsonb, $8)
+     RETURNING id, order_number`,
+    [
+      "RVN-LEGACY7",
+      "legacy@test.local",
+      "Legacy Customer",
+      "+213555000077",
+      "77 Old Street",
+      7000,
+      JSON.stringify([
+        {
+          productId: p7Create.id,
+          slug: P7_SLUG,
+          name: "Phase7 Order Jacket",
+          price: 7000,
+          quantity: 1,
+          size: "M",
+          color: "Onyx",
+        },
+      ]),
+      "جديد",
+    ],
+  );
+  await legacyClient.end();
+  const legacyId = legacyInsert.rows[0].id;
+  const legacyDetail = await jfetch(`${BASE}/api/admin/orders/${legacyId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "legacy order readable with Phase 7 defaults",
+    legacyDetail.ok === true &&
+      legacyDetail.order.paymentStatus === "pending" &&
+      legacyDetail.order.paymentMethod === "cod" &&
+      legacyDetail.order.stockRestored === false,
+    JSON.stringify(legacyDetail.order?.paymentStatus),
+  );
+  const legacyCancel = await jfetch(`${BASE}/api/admin/orders/${legacyId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({ status: "ملغى" }),
+  }).then((r) => r.json());
+  const afterLegacyCancel = await jfetch(
+    `${BASE}/api/admin/products/${p7Create.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "legacy order cancellation restores product-level stock",
+    legacyCancel.ok === true &&
+      legacyCancel.stockRestored === true &&
+      afterLegacyCancel.product.stock === 5,
+    JSON.stringify({ legacyCancel, stock: afterLegacyCancel.product.stock }),
+  );
+  const legacyInList = await jfetch(
+    `${BASE}/api/admin/orders?q=RVN-LEGACY7`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check("legacy order appears in search", legacyInList.total === 1);
+
+  // 12.12 Admin pages render (SSR) with the new management UI.
+  const ordersPage = await jfetch(`${BASE}/admin/orders`, {
+    headers: { cookie: auth.cookie },
+  });
+  const ordersHtml = normalized(await ordersPage.text());
+  check(
+    "admin orders page SSR renders rows + toolbar",
+    ordersPage.status === 200 &&
+      ordersHtml.includes(p7Buy.orderNumber) &&
+      ordersHtml.includes("All statuses"),
+  );
+  const orderPage = await jfetch(`${BASE}/admin/orders/${p7Order.id}`, {
+    headers: { cookie: auth.cookie },
+  });
+  const orderHtml = normalized(await orderPage.text());
+  check(
+    "order detail page SSR renders items, notes and history",
+    orderPage.status === 200 &&
+      orderHtml.includes("P7-M-ONYX") &&
+      orderHtml.includes("Internal notes") &&
+      orderHtml.includes("History"),
+  );
+
+  // Cleanup.
+  await jfetch(`${BASE}/api/admin/products/${p7Create.id}`, {
+    method: "DELETE",
+    headers: adminHeaders,
+  });
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

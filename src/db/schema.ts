@@ -76,6 +76,41 @@ export const orders = pgTable("orders", {
   total: integer("total").notNull(),
   items: jsonb("items").$type<OrderItem[]>().notNull().default([]),
   status: text("status").notNull().default("جديد"),
+  /** Phase 7: payment lifecycle (separate from fulfillment). */
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  /** Phase 7: checkout is cash-on-delivery; stored per order as a snapshot. */
+  paymentMethod: text("payment_method").notNull().default("cod"),
+  /** Phase 7: currency snapshot ('' = fall back to the store currency). */
+  currency: text("currency").notNull().default(""),
+  /** Phase 7: true once a cancel/refund has restored stock (idempotency). */
+  stockRestored: boolean("stock_restored").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// ---------------- ORDER NOTES + AUDIT TRAIL (Phase 7) ----------------
+// Internal admin notes, never exposed on public endpoints.
+export const orderNotes = pgTable("order_notes", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  author: text("author").notNull().default(""),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Lightweight status/payment/stock history so admins can see what happened.
+export const orderEvents = pgTable("order_events", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull().default("status"), // status | payment | stock | note
+  fromValue: text("from_value").notNull().default(""),
+  toValue: text("to_value").notNull().default(""),
+  actor: text("actor").notNull().default(""),
+  note: text("note").notNull().default(""),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -236,6 +271,8 @@ export const PRODUCT_STATUSES = ["draft", "active", "archived"] as const;
 export type ProductStatus = (typeof PRODUCT_STATUSES)[number];
 export type Review = typeof reviews.$inferSelect;
 export type Order = typeof orders.$inferSelect;
+export type OrderNote = typeof orderNotes.$inferSelect;
+export type OrderEvent = typeof orderEvents.$inferSelect;
 export type AdminUser = typeof adminUsers.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type DeliveryZone = typeof deliveryZones.$inferSelect;
@@ -250,6 +287,19 @@ export const ORDER_STATUSES = [
   "تم الشحن",
   "تم التسليم",
   "ملغى",
+  // Phase 7: refunded — reachable from delivered via the explicit refund flow.
+  "مرجع",
 ] as const;
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+/** Phase 7: payment lifecycle is separate from fulfillment status. */
+export const PAYMENT_STATUSES = [
+  "pending",
+  "paid",
+  "failed",
+  "refunded",
+  "partially_refunded",
+] as const;
+
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];

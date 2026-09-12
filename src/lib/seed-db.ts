@@ -255,6 +255,48 @@ function isAlreadyExistsErr(err: unknown, codes: string[], messages: string): bo
   );
 }
 
+const ORDER_SCHEMA_STATEMENTS = [
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "payment_status" text DEFAULT 'pending' NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "payment_method" text DEFAULT 'cod' NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "currency" text DEFAULT '' NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "stock_restored" boolean DEFAULT false NOT NULL`,
+  `ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now() NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS "order_notes" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "order_id" integer NOT NULL REFERENCES "orders"("id") ON DELETE cascade,
+    "author" text DEFAULT '' NOT NULL,
+    "body" text NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "order_notes_order_id_idx" ON "order_notes" ("order_id")`,
+  `CREATE TABLE IF NOT EXISTS "order_events" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "order_id" integer NOT NULL REFERENCES "orders"("id") ON DELETE cascade,
+    "kind" text DEFAULT 'status' NOT NULL,
+    "from_value" text DEFAULT '' NOT NULL,
+    "to_value" text DEFAULT '' NOT NULL,
+    "actor" text DEFAULT '' NOT NULL,
+    "note" text DEFAULT '' NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS "order_events_order_id_idx" ON "order_events" ("order_id")`,
+];
+
+/**
+ * Phase 7: additive, idempotent order-management schema upgrade. Existing
+ * orders keep working unchanged: new columns have safe defaults (payment
+ * pending / cod / totals untouched), so historical data is preserved.
+ */
+export async function ensureOrderSchema(db: SeedDb): Promise<void> {
+  for (const statement of ORDER_SCHEMA_STATEMENTS) {
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (err) {
+      if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
+    }
+  }
+}
+
 const PRODUCT_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS "product_variants" (
     "id" serial PRIMARY KEY NOT NULL,
@@ -628,6 +670,7 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureCmsSchema(db);
   await ensureProductSchema(db);
   await ensureCategorySchema(db);
+  await ensureOrderSchema(db);
 
   // Top the catalogue up to the full seed set (handles empty databases and
   // partial ones left by earlier concurrent/aborted seeding attempts).

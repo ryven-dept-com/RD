@@ -43,6 +43,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     "تم الشحن": 0,
     "تم التسليم": 0,
     ملغى: 0,
+    مرجع: 0, // Phase 7: refunded orders tracked separately
   };
   let totalOrders = 0;
   let totalSales = 0;
@@ -50,7 +51,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const count = Number(r.c);
     totalOrders += count;
     if (r.status in statusCounts) statusCounts[r.status] = count;
-    if (r.status !== "ملغى") totalSales += Number(r.sum);
+    // Revenue excludes cancelled and refunded orders.
+    if (r.status !== "ملغى" && r.status !== "مرجع") totalSales += Number(r.sum);
   }
 
   return {

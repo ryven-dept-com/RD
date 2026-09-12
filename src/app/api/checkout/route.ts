@@ -287,6 +287,10 @@ export async function POST(request: Request) {
           total,
           items: orderItems,
           status: "جديد",
+          // Phase 7 snapshots: payment is cash-on-delivery (the store's real
+          // checkout method) and the currency is fixed at purchase time.
+          paymentMethod: "cod",
+          currency: store ? store.currency : "",
         })
         .returning();
     }).catch((err) => {

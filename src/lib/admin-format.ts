@@ -32,4 +32,14 @@ export const STATUS_STYLES: Record<string, string> = {
   "تم الشحن": "bg-purple-100 text-purple-700",
   "تم التسليم": "bg-emerald-100 text-emerald-700",
   ملغى: "bg-rose-100 text-rose-700",
+  مرجع: "bg-orange-100 text-orange-700",
+};
+
+/** Phase 7: payment status badge styles. */
+export const PAYMENT_STATUS_STYLES: Record<string, string> = {
+  pending: "bg-slate-100 text-slate-600",
+  paid: "bg-emerald-100 text-emerald-700",
+  failed: "bg-rose-100 text-rose-700",
+  refunded: "bg-orange-100 text-orange-700",
+  partially_refunded: "bg-amber-100 text-amber-700",
 };
