@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useStoreConfig } from "@/context/store-context";
+import { useT } from "@/i18n/language-context";
 import { StarRating } from "./star-rating";
 
 export type ProductCardData = {
@@ -30,6 +31,7 @@ export function ProductCard({
   index?: number;
 }) {
   const { formatPrice } = useStoreConfig();
+  const t = useT();
   const onSale =
     product.compareAtPrice != null && product.compareAtPrice > product.price;
   const secondImage = product.images[1] ?? product.images[0];
@@ -60,25 +62,25 @@ export function ProductCard({
         />
 
         {/* badges */}
-        <div className="absolute left-3 top-3 flex flex-col gap-1.5">
+        <div className="absolute start-3 top-3 flex flex-col gap-1.5">
           {product.soldOut && (
             <span className="rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-ink shadow-sm">
-              Sold Out
+              {t("product.soldOut")}
             </span>
           )}
           {product.isNew && (
             <span className="rounded-full bg-ink px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-bone">
-              New
+              {t("product.new")}
             </span>
           )}
           {onSale && (
             <span className="rounded-full bg-amber px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-ink">
-              Sale
+              {t("product.sale")}
             </span>
           )}
           {product.bestSeller && !product.isNew && (
             <span className="rounded-full bg-bone px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-ink">
-              Best Seller
+              {t("product.bestSeller")}
             </span>
           )}
         </div>
@@ -86,7 +88,7 @@ export function ProductCard({
         {/* quick view hint */}
         <div className="absolute inset-x-3 bottom-3 translate-y-3 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
           <span className="flex w-full items-center justify-center rounded-full bg-bone/95 py-2.5 text-xs font-semibold uppercase tracking-widest text-ink backdrop-blur">
-            View Product
+            {t("product.viewProduct")}
           </span>
         </div>
       </div>
@@ -116,8 +118,8 @@ export function ProductCard({
             </span>
           )}
           {product.colors.length > 1 && (
-            <span className="ml-auto text-[11px] text-black/40">
-              {product.colors.length} colors
+            <span className="ms-auto text-[11px] text-black/40">
+              {t("product.colors", { count: product.colors.length })}
             </span>
           )}
         </div>

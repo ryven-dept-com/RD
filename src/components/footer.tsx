@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import type { FooterContent, NewsletterContent } from "@/lib/cms";
+import { useT } from "@/i18n/language-context";
 
 export type FooterProps = {
   content: FooterContent;
@@ -10,8 +13,10 @@ export type FooterProps = {
 };
 
 export function Footer({ content, newsletter, contact, storeName }: FooterProps) {
+  const t = useT();
   const copyright =
-    content.copyright || `${storeName || "RUVEN DEPT"}. All rights reserved.`;
+    content.copyright ||
+    t("footer.copyright", { name: storeName || "RUVEN DEPT" });
   const hasContact =
     content.showContact &&
     Boolean(contact.email || contact.phone || contact.address);
@@ -49,7 +54,7 @@ export function Footer({ content, newsletter, contact, storeName }: FooterProps)
                   </li>
                 )}
                 {contact.phone && (
-                  <li dir="ltr" className="text-left">
+                  <li dir="ltr" className="text-start">
                     <a
                       href={`tel:${contact.phone.replace(/\s+/g, "")}`}
                       className="transition-colors hover:text-bone"
@@ -65,15 +70,15 @@ export function Footer({ content, newsletter, contact, storeName }: FooterProps)
               <form className="mt-6 flex max-w-sm items-center gap-2">
                 <input
                   type="email"
-                  placeholder={newsletter.title || "Email address"}
-                  aria-label={newsletter.title || "Email address"}
+                  placeholder={newsletter.title || t("footer.newsletterPlaceholder")}
+                  aria-label={newsletter.title || t("footer.newsletterPlaceholder")}
                   className="w-full rounded-full border border-bone/20 bg-transparent px-4 py-2.5 text-sm placeholder:text-bone/40 focus:border-bone/60 focus:outline-none"
                 />
                 <button
                   type="submit"
                   className="shrink-0 rounded-full bg-bone px-5 py-2.5 text-xs font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
                 >
-                  {newsletter.buttonText || "Join"}
+                  {newsletter.buttonText || t("footer.join")}
                 </button>
               </form>
             )}
@@ -121,9 +126,9 @@ export function Footer({ content, newsletter, contact, storeName }: FooterProps)
                 {s.label}
               </a>
             ))}
-            <span>Privacy</span>
-            <span>Terms</span>
-            <span>Accessibility</span>
+            <span>{t("footer.privacy")}</span>
+            <span>{t("footer.terms")}</span>
+            <span>{t("footer.accessibility")}</span>
           </div>
         </div>
       </div>

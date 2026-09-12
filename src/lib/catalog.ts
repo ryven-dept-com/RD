@@ -12,6 +12,8 @@
  * groups.
  */
 
+import { isoCurrencyCode } from "@/lib/money";
+
 export type CatalogVariant = {
   id: number;
   size: string;
@@ -56,12 +58,12 @@ export const CATALOG_COLUMNS = [
 ] as const;
 
 /**
- * Meta requires an ISO-4217 currency code in feed prices. The store's
- * configured currency may be a symbol (دج) — fall back to DZD in that case.
+ * Meta requires an ISO-4217 currency code in feed prices. Delegates to the
+ * centralized money module (Phase 9) so the catalog, Meta events and orders
+ * all share one normalization rule.
  */
 export function feedCurrencyCode(currency: string): string {
-  const c = currency.trim();
-  return /^[a-zA-Z]{3}$/.test(c) ? c.toUpperCase() : "DZD";
+  return isoCurrencyCode(currency);
 }
 
 export function formatFeedPrice(cents: number, currencyCode: string): string {

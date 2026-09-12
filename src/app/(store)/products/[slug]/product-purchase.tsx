@@ -10,6 +10,7 @@ import {
   buildViewContentEvent,
 } from "@/lib/pixel-events";
 import { ArrowRightIcon, MinusIcon, PlusIcon } from "@/components/icons";
+import { useT } from "@/i18n/language-context";
 import type { StorefrontVariant } from "@/lib/queries";
 
 type PurchaseProps = {
@@ -42,7 +43,8 @@ function optionLists(variants: StorefrontVariant[]): {
 export function ProductPurchase(props: PurchaseProps) {
   const router = useRouter();
   const { buyNow } = useCart();
-  const { formatPrice, pixel, currency } = useStoreConfig();
+  const { formatPrice, pixel, currencyCode } = useStoreConfig();
+  const t = useT();
 
   const variants = useMemo(() => props.variants ?? [], [props.variants]);
   const hasVariants = variants.length > 0;
@@ -119,7 +121,7 @@ export function ProductPurchase(props: PurchaseProps) {
             price: props.price,
             category: props.category,
           },
-          currency,
+          currencyCode,
         ),
       );
     }
@@ -159,7 +161,7 @@ export function ProductPurchase(props: PurchaseProps) {
         buildAddToCartEvent(
           { slug: props.slug, name: props.name, price: props.price },
           quantity,
-          currency,
+          currencyCode,
         ),
       );
     }
@@ -173,7 +175,7 @@ export function ProductPurchase(props: PurchaseProps) {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-[0.2em] text-black/50">
-              Color
+              {t("product.color")}
             </span>
             <span className="text-sm text-black/60">{color}</span>
           </div>
@@ -234,7 +236,7 @@ export function ProductPurchase(props: PurchaseProps) {
         </div>
         {error && needSize && (
           <p className="mt-2 text-xs font-medium text-red-600">
-            Please select a size.
+            {t("product.selectSize")}
           </p>
         )}
       </div>
@@ -246,7 +248,7 @@ export function ProductPurchase(props: PurchaseProps) {
             onClick={() => setQty((q) => Math.max(1, q - 1))}
             className="flex h-12 w-12 items-center justify-center transition-opacity hover:opacity-60 disabled:opacity-30"
             disabled={qty <= 1}
-            aria-label="Decrease quantity"
+            aria-label={t("product.decrease")}
           >
             <MinusIcon className="h-4 w-4" />
           </button>
@@ -257,7 +259,7 @@ export function ProductPurchase(props: PurchaseProps) {
             onClick={() => setQty((q) => Math.min(effectiveStock, q + 1))}
             className="flex h-12 w-12 items-center justify-center transition-opacity hover:opacity-60 disabled:opacity-30"
             disabled={qty >= effectiveStock}
-            aria-label="Increase quantity"
+            aria-label={t("product.increase")}
           >
             <PlusIcon className="h-4 w-4" />
           </button>
@@ -273,11 +275,11 @@ export function ProductPurchase(props: PurchaseProps) {
           }`}
         >
           {!canBuy && effectiveStock <= 0 && !needSize ? (
-            <>Sold Out</>
+            <>{t("product.soldOut")}</>
           ) : (
             <>
-              Buy now · {formatPrice(props.price * qty)}
-              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+              {t("product.buyNow")} · {formatPrice(props.price * qty)}
+              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
             </>
           )}
         </button>
@@ -285,7 +287,7 @@ export function ProductPurchase(props: PurchaseProps) {
 
       {lowStock && (
         <p className="text-center text-xs font-medium text-amber-700">
-          Only {effectiveStock} left in stock — order soon.
+          {t("product.onlyLeft", { count: effectiveStock })}
         </p>
       )}
     </div>

@@ -5,14 +5,23 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
+import { useT } from "@/i18n/language-context";
 import { BagIcon, CloseIcon, MenuIcon } from "./icons";
+import { LanguageSwitcher } from "./language-switcher";
 
-export type NavLink = { label: string; href: string };
+export type NavLink = {
+  label: string;
+  href: string;
+  /** Optional i18n key for SYSTEM links (category names are data — never keyed). */
+  systemKey?: string;
+};
 
 export function NavbarClient({ links }: { links: NavLink[] }) {
   const { count, openCart } = useCart();
   const { logoUrl, storeName } = useStoreConfig();
+  const t = useT();
   const pathname = usePathname();
+  const label = (l: NavLink) => (l.systemKey ? t(l.systemKey) : l.label);
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -47,9 +56,9 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-8">
           <button
-            className="lg:hidden -ml-1 p-1"
+            className="lg:hidden -ms-1 p-1"
             onClick={() => setMobileOpen((o) => !o)}
-            aria-label="Toggle menu"
+            aria-label={t("nav.toggleMenu")}
           >
             {mobileOpen ? (
               <CloseIcon className="h-6 w-6" />
@@ -85,7 +94,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
                   href={l.href}
                   className="relative py-1 transition-opacity hover:opacity-60"
                 >
-                  {l.label}
+                  {label(l)}
                 </Link>
               </li>
             ))}
@@ -97,16 +106,19 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
             href="/shop"
             className="hidden text-[13px] font-medium uppercase tracking-wide transition-opacity hover:opacity-60 sm:block"
           >
-            Search
+            {t("nav.search")}
           </Link>
+          <div className="hidden sm:block">
+            <LanguageSwitcher compact />
+          </div>
           <button
             onClick={openCart}
             className="relative flex items-center gap-2 rounded-full px-1 py-1 transition-opacity hover:opacity-70"
-            aria-label="Open cart"
+            aria-label={t("nav.openCart")}
           >
             <BagIcon className="h-6 w-6" />
             <span
-              className={`absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums transition-transform ${
+              className={`absolute -end-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums transition-transform ${
                 count > 0 ? "scale-100" : "scale-0"
               } ${transparent ? "bg-bone text-ink" : "bg-ink text-bone"}`}
             >
@@ -119,7 +131,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
       {/* Mobile menu */}
       <div
         className={`overflow-hidden border-t border-black/10 bg-bone text-ink transition-[max-height] duration-300 lg:hidden ${
-          mobileOpen ? "max-h-96" : "max-h-0"
+          mobileOpen ? "max-h-[30rem]" : "max-h-0"
         }`}
       >
         <ul className="flex flex-col gap-1 px-4 py-4">
@@ -129,10 +141,13 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
                 href={l.href}
                 className="block rounded-lg px-3 py-3 text-sm font-semibold uppercase tracking-wide hover:bg-black/5"
               >
-                {l.label}
+                {label(l)}
               </Link>
             </li>
           ))}
+          <li className="px-3 pt-2">
+            <LanguageSwitcher compact />
+          </li>
         </ul>
       </div>
     </header>

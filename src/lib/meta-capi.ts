@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import { getStoreSettings, getSettingSecret } from "@/lib/settings";
+import { isoCurrencyCode } from "@/lib/money";
 
 /**
  * Meta Conversions API (server-side events).
@@ -108,7 +109,7 @@ export async function sendMetaPurchaseServerEvent(
     event_source_url: `${new URL(params.request.url).origin}/checkout`,
     user_data: userData,
     custom_data: {
-      currency: store.currency,
+      currency: isoCurrencyCode(store.currency),
       value: Math.round(params.total) / 100,
       content_ids: params.items.map((i) => i.slug),
       content_type: "product",

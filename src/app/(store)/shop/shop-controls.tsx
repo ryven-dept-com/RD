@@ -3,28 +3,26 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, type FormEvent } from "react";
 import { CloseIcon } from "@/components/icons";
+import { useT } from "@/i18n/language-context";
+import { useStoreConfig } from "@/context/store-context";
 
+// Labels resolve through the i18n dictionary at render time.
 const SORTS = [
-  { value: "featured", label: "Featured" },
-  { value: "new", label: "Newest" },
-  { value: "price-asc", label: "Price: Low to High" },
-  { value: "price-desc", label: "Price: High to Low" },
-  { value: "rating", label: "Top Rated" },
+  { value: "featured", key: "shop.featured" },
+  { value: "new", key: "shop.newest" },
+  { value: "price-asc", key: "shop.priceAsc" },
+  { value: "price-desc", key: "shop.priceDesc" },
+  { value: "rating", key: "shop.topRated" },
 ];
 
 const QUICK = [
-  { value: "new", label: "New Arrivals" },
-  { value: "best", label: "Best Sellers" },
-  { value: "sale", label: "On Sale" },
+  { value: "new", key: "shop.newArrivals" },
+  { value: "best", key: "shop.bestSellers" },
+  { value: "sale", key: "shop.onSale" },
 ];
 
 /** Max-price steps (in cents) for the price filter. */
-const PRICE_STEPS = [
-  { value: 5000, label: "Under $50" },
-  { value: 10000, label: "Under $100" },
-  { value: 15000, label: "Under $150" },
-  { value: 25000, label: "Under $250" },
-];
+const PRICE_STEPS = [5000, 10000, 15000, 25000];
 
 export type ShopFilterOptions = {
   sizes: string[];
@@ -39,6 +37,7 @@ export function SortSelect({ resultCount }: { resultCount: number }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const t = useT();
   const current = params.get("sort") ?? "featured";
 
   const onChange = (value: string) => {
@@ -51,18 +50,18 @@ export function SortSelect({ resultCount }: { resultCount: number }) {
   return (
     <div className="flex items-center gap-3">
       <span className="hidden text-sm text-black/50 sm:inline">
-        {resultCount} {resultCount === 1 ? "item" : "items"}
+        {resultCount} {resultCount === 1 ? t("shop.item") : t("shop.items")}
       </span>
       <label className="flex items-center gap-2 text-sm">
-        <span className="text-black/50">Sort</span>
+        <span className="text-black/50">{t("shop.sort")}</span>
         <select
           value={current}
           onChange={(e) => onChange(e.target.value)}
-          className="rounded-full border border-black/15 bg-transparent py-2 pl-3 pr-8 text-sm font-medium focus:border-ink focus:outline-none"
+          className="rounded-full border border-black/15 bg-transparent py-2 ps-3 pe-8 text-sm font-medium focus:border-ink focus:outline-none"
         >
-          {SORTS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
+          {SORTS.map((so) => (
+            <option key={so.value} value={so.value}>
+              {t(so.key)}
             </option>
           ))}
         </select>
@@ -76,6 +75,7 @@ export function SearchBar({ className = "" }: { className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const t = useT();
   const [value, setValue] = useState(params.get("q") ?? "");
 
   const submit = (e: FormEvent) => {
@@ -93,8 +93,8 @@ export function SearchBar({ className = "" }: { className?: string }) {
         type="search"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Search products…"
-        aria-label="Search products"
+        placeholder={t("shop.searchPlaceholder")}
+        aria-label={t("shop.searchLabel")}
         className="w-full rounded-full border border-black/15 bg-transparent px-4 py-2 text-sm placeholder:text-black/35 focus:border-ink focus:outline-none"
       />
     </form>
@@ -111,6 +111,8 @@ function FilterBody({
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const t = useT();
+  const { formatPrice } = useStoreConfig();
 
   const category = params.get("category") ?? "";
   const collection = params.get("collection") ?? "";
@@ -146,7 +148,7 @@ function FilterBody({
   };
 
   const rowClass = (active: boolean) =>
-    `flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+    `flex w-full items-center justify-between rounded-lg px-3 py-2 text-start text-sm transition-colors ${
       active ? "bg-ink text-bone" : "hover:bg-black/5"
     }`;
 
@@ -164,14 +166,14 @@ function FilterBody({
       <div>
         <div className="flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-            Category
+            {t("shop.category")}
           </h3>
           {hasFilters && (
             <button
               onClick={clearAll}
               className="text-xs font-medium text-black/40 underline-offset-2 hover:text-ink hover:underline"
             >
-              Clear all
+              {t("shop.clearAll")}
             </button>
           )}
         </div>
@@ -180,7 +182,7 @@ function FilterBody({
             onClick={() => update("category", "")}
             className={rowClass(!category)}
           >
-            All Products
+            {t("shop.allProducts")}
           </button>
           {options.categories.map((c) => (
             <button
@@ -197,7 +199,7 @@ function FilterBody({
       {options.collections.length > 0 && (
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-          Collection
+          {t("shop.collection")}
         </h3>
         <div className="mt-3 flex flex-wrap gap-2">
           {options.collections.map((c) => (
@@ -217,7 +219,7 @@ function FilterBody({
       {options.sizes.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-            Size
+            {t("shop.size")}
           </h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {options.sizes.map((s) => (
@@ -237,7 +239,7 @@ function FilterBody({
       {options.colors.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-            Color
+            {t("shop.color")}
           </h3>
           <div className="mt-3 flex flex-wrap gap-2">
             {options.colors.map((c) => (
@@ -256,14 +258,14 @@ function FilterBody({
       {/* Phase 5: availability */}
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-          Availability
+          {t("shop.availability")}
         </h3>
         <div className="mt-3 space-y-1">
           <button onClick={() => update("inStock", "")} className={rowClass(!inStock)}>
-            All items
+            {t("shop.allItems")}
           </button>
           <button onClick={() => update("inStock", "1")} className={rowClass(inStock)}>
-            In stock only
+            {t("shop.inStockOnly")}
           </button>
         </div>
       </div>
@@ -271,19 +273,19 @@ function FilterBody({
       {/* Phase 5: price */}
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-          Price
+          {t("shop.price")}
         </h3>
         <div className="mt-3 space-y-1">
           <button onClick={() => update("maxPrice", "")} className={rowClass(!maxPrice)}>
-            Any price
+            {t("shop.anyPrice")}
           </button>
-          {PRICE_STEPS.map((p) => (
+          {PRICE_STEPS.map((step) => (
             <button
-              key={p.value}
-              onClick={() => update("maxPrice", String(p.value))}
-              className={rowClass(maxPrice === p.value)}
+              key={step}
+              onClick={() => update("maxPrice", String(step))}
+              className={rowClass(maxPrice === step)}
             >
-              {p.label}
+              {t("shop.under", { amount: formatPrice(step) })}
             </button>
           ))}
         </div>
@@ -291,7 +293,7 @@ function FilterBody({
 
       <div>
         <h3 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-          Highlights
+          {t("shop.highlights")}
         </h3>
         <div className="mt-3 space-y-1">
           {QUICK.map((q) => (
@@ -300,7 +302,7 @@ function FilterBody({
               onClick={() => update("filter", q.value)}
               className={rowClass(filter === q.value)}
             >
-              {q.label}
+              {t(q.key)}
             </button>
           ))}
         </div>
@@ -321,13 +323,14 @@ export function DesktopFilters({ options }: { options: ShopFilterOptions }) {
 
 export function MobileFilters({ options }: { options: ShopFilterOptions }) {
   const [open, setOpen] = useState(false);
+  const t = useT();
   return (
     <>
       <button
         onClick={() => setOpen(true)}
         className="rounded-full border border-black/15 px-4 py-2 text-sm font-medium lg:hidden"
       >
-        Filters
+        {t("shop.filters")}
       </button>
       {open && (
         <div className="fixed inset-0 z-[70] lg:hidden">
@@ -335,12 +338,12 @@ export function MobileFilters({ options }: { options: ShopFilterOptions }) {
             className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-y-0 left-0 w-80 max-w-[85%] animate-fade-in overflow-y-auto bg-bone p-5">
+          <div className="absolute inset-y-0 start-0 w-80 max-w-[85%] animate-fade-in overflow-y-auto bg-bone p-5">
             <div className="mb-6 flex items-center justify-between">
               <h2 className="font-display text-lg uppercase tracking-wide">
-                Filters
+                {t("shop.filters")}
               </h2>
-              <button onClick={() => setOpen(false)} aria-label="Close filters">
+              <button onClick={() => setOpen(false)} aria-label={t("shop.closeFilters")}>
                 <CloseIcon className="h-6 w-6" />
               </button>
             </div>

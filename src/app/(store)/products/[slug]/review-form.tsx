@@ -2,9 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useT } from "@/i18n/language-context";
 
 export function ReviewForm({ productId }: { productId: number }) {
   const router = useRouter();
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [author, setAuthor] = useState("");
   const [rating, setRating] = useState(5);
@@ -19,7 +21,7 @@ export function ReviewForm({ productId }: { productId: number }) {
     e.preventDefault();
     setError("");
     if (!author.trim() || !body.trim()) {
-      setError("Please add your name and a few words.");
+      setError(t("review.validation"));
       return;
     }
     setSubmitting(true);
@@ -41,7 +43,7 @@ export function ReviewForm({ productId }: { productId: number }) {
         setOpen(false);
       }, 2000);
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError(t("common.error"));
     } finally {
       setSubmitting(false);
     }
@@ -53,7 +55,7 @@ export function ReviewForm({ productId }: { productId: number }) {
         onClick={() => setOpen(true)}
         className="rounded-full border border-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest transition-colors hover:bg-ink hover:text-bone"
       >
-        Write a review
+        {t("review.write")}
       </button>
     );
   }
@@ -64,12 +66,12 @@ export function ReviewForm({ productId }: { productId: number }) {
       className="animate-scale-in rounded-2xl border border-black/10 bg-brand-50 p-6"
     >
       <h3 className="font-display text-xl uppercase tracking-wide">
-        Write a review
+        {t("review.write")}
       </h3>
 
       {done ? (
         <p className="mt-4 rounded-lg bg-olive/10 px-4 py-3 text-sm font-medium text-olive">
-          Thanks! Your review has been posted.
+          {t("review.thanks")}
         </p>
       ) : (
         <>
@@ -82,7 +84,9 @@ export function ReviewForm({ productId }: { productId: number }) {
                 onMouseEnter={() => setHover(s)}
                 onMouseLeave={() => setHover(0)}
                 className="p-0.5"
-                aria-label={`${s} star${s > 1 ? "s" : ""}`}
+                aria-label={t(s > 1 ? "review.starMany" : "review.starOne", {
+                  count: s,
+                })}
               >
                 <svg
                   width="26"
@@ -105,20 +109,20 @@ export function ReviewForm({ productId }: { productId: number }) {
             <input
               value={author}
               onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Your name"
+              placeholder={t("review.name")}
               className="rounded-lg border border-black/15 bg-bone px-4 py-2.5 text-sm focus:border-ink focus:outline-none"
             />
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Review title (optional)"
+              placeholder={t("review.titlePlaceholder")}
               className="rounded-lg border border-black/15 bg-bone px-4 py-2.5 text-sm focus:border-ink focus:outline-none"
             />
           </div>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="What did you think?"
+            placeholder={t("review.bodyPlaceholder")}
             rows={4}
             className="mt-3 w-full rounded-lg border border-black/15 bg-bone px-4 py-2.5 text-sm focus:border-ink focus:outline-none"
           />
@@ -133,14 +137,14 @@ export function ReviewForm({ productId }: { productId: number }) {
               disabled={submitting}
               className="rounded-full bg-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-105 disabled:opacity-50"
             >
-              {submitting ? "Posting…" : "Submit review"}
+              {submitting ? t("review.posting") : t("review.submit")}
             </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
               className="text-xs font-medium uppercase tracking-widest text-black/50 hover:text-ink"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </>

@@ -20,30 +20,21 @@ import {
   StarBadgeIcon,
   TruckIcon,
 } from "@/components/icons";
+import { cookies } from "next/headers";
+import { LOCALE_COOKIE, resolveLocale, translate } from "@/i18n/translations";
+import { getStoreSettings } from "@/lib/settings";
+import { formatWholeMoney, isoCurrencyCode } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
+// USP value props: translation keys resolved against the visitor's locale
+// at request time (server component). The free-shipping threshold comes from
+// the real store settings so the copy always matches the active currency.
 const VALUES = [
-  {
-    icon: TruckIcon,
-    title: "Free express shipping",
-    copy: "On all orders over $150, delivered in 2–4 days.",
-  },
-  {
-    icon: RefreshIcon,
-    title: "30-day easy returns",
-    copy: "Not right? Send it back, no questions asked.",
-  },
-  {
-    icon: ShieldIcon,
-    title: "Built to outlast",
-    copy: "Heavyweight fabrics and reinforced construction.",
-  },
-  {
-    icon: StarBadgeIcon,
-    title: "Loved by thousands",
-    copy: "4.8/5 average across 2,400+ verified reviews.",
-  },
+  { icon: TruckIcon, titleKey: "home.usp1Title", copyKey: "home.usp1Copy" },
+  { icon: RefreshIcon, titleKey: "home.usp2Title", copyKey: "home.usp2Copy" },
+  { icon: ShieldIcon, titleKey: "home.usp3Title", copyKey: "home.usp3Copy" },
+  { icon: StarBadgeIcon, titleKey: "home.usp4Title", copyKey: "home.usp4Copy" },
 ];
 
 /** Render multi-line CMS titles with the original <br/> line breaks. */
@@ -62,7 +53,28 @@ function Multiline({ text }: { text: string }) {
 }
 
 export default async function HomePage() {
-  const cms = await getCmsData();
+  // Phase 9: resolve the visitor's language from the rd-locale cookie so
+  // server-rendered copy matches the language chosen in the header.
+  let locale = resolveLocale(undefined);
+  try {
+    locale = resolveLocale((await cookies()).get(LOCALE_COOKIE)?.value);
+  } catch {
+    // default locale
+  }
+  const tr = (key: string, vars?: Record<string, string | number>) =>
+    translate(locale, key, vars);
+
+  const [cms, store] = await Promise.all([
+    getCmsData(),
+    getStoreSettings().catch(() => null),
+  ]);
+  // Safe fallbacks keep the USP copy rendering even if settings are
+  // temporarily unavailable (matches DEFAULT_STORE_CONFIG).
+  const freeShipAmount = formatWholeMoney(
+    store?.freeShippingThreshold ?? 15000,
+    locale,
+    isoCurrencyCode(store?.currency ?? "دج"),
+  );
 
   // CMS-curated product lists fall back to the original flag-based queries
   // whenever they are empty or resolve to nothing, so the page never blanks.
@@ -113,7 +125,7 @@ export default async function HomePage() {
               )}
               <img
                 src={hero.backgroundImage}
-                alt="Ruven Dept. streetwear campaign"
+                alt={tr("home.heroAlt")}
                 className="absolute inset-0 h-full w-full object-cover object-center animate-fade-in"
               />
             </picture>
@@ -139,7 +151,7 @@ export default async function HomePage() {
                   className="group flex items-center gap-2 rounded-full bg-bone px-8 py-4 text-sm font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
                 >
                   {hero.primaryText}
-                  <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1 rtl:-scale-x-100" />
                 </Link>
               )}
               {hero.secondaryText && (
@@ -158,7 +170,7 @@ export default async function HomePage() {
       {/* MARQUEE */}
       <section className="border-y border-ink/10 bg-ink py-3 text-bone">
         <div className="relative flex overflow-hidden">
-          <div className="animate-marquee flex shrink-0 items-center gap-8 whitespace-nowrap pr-8">
+          <div className="animate-marquee flex shrink-0 items-center gap-8 whitespace-nowrap pe-8">
             {[...marquee, ...marquee].map((m, i) => (
               <span
                 key={i}
@@ -228,17 +240,17 @@ export default async function HomePage() {
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-black/40">
-              Curated Lines
+              {tr("home.curatedLines")}
             </p>
             <h2 className="mt-2 font-display text-4xl uppercase tracking-tight sm:text-5xl">
-              Shop by collection
+              {tr("home.shopByCollection")}
             </h2>
           </div>
           <Link
             href="/shop"
             className="hidden shrink-0 items-center gap-1.5 text-sm font-semibold uppercase tracking-wide hover:opacity-60 sm:flex"
           >
-            View all <ArrowRightIcon className="h-4 w-4" />
+            {tr("home.viewAll")} <ArrowRightIcon className="h-4 w-4 rtl:-scale-x-100" />
           </Link>
         </div>
 
@@ -275,8 +287,8 @@ export default async function HomePage() {
                   </h3>
                   <p className="mt-1 text-sm text-bone/70">{c.description}</p>
                   <span className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest">
-                    Explore
-                    <ArrowRightIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+                    {tr("home.explore")}
+                    <ArrowRightIcon className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1 rtl:-scale-x-100" />
                   </span>
                 </div>
               </Link>
@@ -291,17 +303,17 @@ export default async function HomePage() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-black/40">
-                The Essentials
+                {tr("home.theEssentials")}
               </p>
               <h2 className="mt-2 font-display text-4xl uppercase tracking-tight sm:text-5xl">
-                Featured pieces
+                {tr("home.featuredPieces")}
               </h2>
             </div>
             <Link
               href="/shop"
               className="hidden shrink-0 items-center gap-1.5 text-sm font-semibold uppercase tracking-wide hover:opacity-60 sm:flex"
             >
-              Shop all <ArrowRightIcon className="h-4 w-4" />
+              {tr("nav.shopAll")} <ArrowRightIcon className="h-4 w-4 rtl:-scale-x-100" />
             </Link>
           </div>
 
@@ -319,7 +331,7 @@ export default async function HomePage() {
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:px-8 lg:py-28">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-bone/50">
-                The Ruven Ethos
+                {tr("home.ethos")}
               </p>
               <h2 className="mt-3 font-display text-4xl uppercase leading-tight tracking-tight sm:text-5xl">
                 <Multiline text={brandStory.title} />
@@ -329,14 +341,14 @@ export default async function HomePage() {
               </p>
               <div className="mt-10 grid grid-cols-3 gap-6">
                 {[
-                  { n: "480", l: "GSM fleece" },
-                  { n: "2.4k+", l: "5-star reviews" },
-                  { n: "30-day", l: "returns" },
-                ].map((s) => (
-                  <div key={s.l}>
-                    <p className="font-display text-3xl sm:text-4xl">{s.n}</p>
+                  { n: "480", l: tr("home.statGsm") },
+                  { n: "2.4k+", l: tr("home.statReviews") },
+                  { n: tr("home.stat30day"), l: tr("home.statReturns") },
+                ].map((stat) => (
+                  <div key={stat.l}>
+                    <p className="font-display text-3xl sm:text-4xl">{stat.n}</p>
                     <p className="mt-1 text-xs uppercase tracking-widest text-bone/50">
-                      {s.l}
+                      {stat.l}
                     </p>
                   </div>
                 ))}
@@ -347,7 +359,7 @@ export default async function HomePage() {
                   className="mt-10 inline-flex items-center gap-2 rounded-full bg-bone px-8 py-4 text-sm font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
                 >
                   {brandStory.ctaText}
-                  <ArrowRightIcon className="h-4 w-4" />
+                  <ArrowRightIcon className="h-4 w-4 rtl:-scale-x-100" />
                 </Link>
               )}
             </div>
@@ -355,7 +367,7 @@ export default async function HomePage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={brandStory.image}
-                alt="Ruven Dept. studio"
+                alt={tr("home.studioAlt")}
                 className="h-full w-full object-cover"
               />
             </div>
@@ -369,17 +381,17 @@ export default async function HomePage() {
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-black/40">
-                Fresh In
+                {tr("home.freshIn")}
               </p>
               <h2 className="mt-2 font-display text-4xl uppercase tracking-tight sm:text-5xl">
-                New arrivals
+                {tr("shop.newArrivals")}
               </h2>
             </div>
             <Link
               href="/shop?filter=new"
               className="hidden shrink-0 items-center gap-1.5 text-sm font-semibold uppercase tracking-wide hover:opacity-60 sm:flex"
             >
-              See all new <ArrowRightIcon className="h-4 w-4" />
+              {tr("home.seeAllNew")} <ArrowRightIcon className="h-4 w-4 rtl:-scale-x-100" />
             </Link>
           </div>
           <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-4">
@@ -394,12 +406,14 @@ export default async function HomePage() {
       <section className="border-t border-black/10 bg-brand-50">
         <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
           {VALUES.map((v) => (
-            <div key={v.title} className="flex flex-col gap-3">
+            <div key={v.titleKey} className="flex flex-col gap-3">
               <v.icon className="h-7 w-7 text-ink" />
               <h3 className="text-sm font-semibold uppercase tracking-wide">
-                {v.title}
+                {tr(v.titleKey)}
               </h3>
-              <p className="text-sm text-black/55">{v.copy}</p>
+              <p className="text-sm text-black/55">
+                {tr(v.copyKey, { amount: freeShipAmount })}
+              </p>
             </div>
           ))}
         </div>

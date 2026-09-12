@@ -1,5 +1,7 @@
 "use client";
 
+import { useT } from "@/i18n/language-context";
+
 import { useState } from "react";
 
 export function ProductGallery({
@@ -11,6 +13,7 @@ export function ProductGallery({
   name: string;
   badge?: string | null;
 }) {
+  const t = useT();
   const [active, setActive] = useState(0);
   const list = images.length ? images : [""];
 
@@ -27,7 +30,7 @@ export function ProductGallery({
                 ? "ring-2 ring-ink ring-offset-2 ring-offset-bone"
                 : "opacity-60 hover:opacity-100"
             }`}
-            aria-label={`View image ${i + 1}`}
+            aria-label={t("product.viewImage", { n: i + 1 })}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -42,7 +45,7 @@ export function ProductGallery({
       {/* main image */}
       <div className="group relative flex-1 overflow-hidden rounded-2xl bg-brand-100">
         {badge && (
-          <span className="absolute left-4 top-4 z-10 rounded-full bg-ink px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-bone">
+          <span className="absolute start-4 top-4 z-10 rounded-full bg-ink px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-bone">
             {badge}
           </span>
         )}

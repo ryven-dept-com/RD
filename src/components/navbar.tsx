@@ -7,11 +7,11 @@ import { NavbarClient, type NavLink } from "./navbar-client";
  * categories load from the database they take over (Phase 6).
  */
 const FALLBACK_LINKS: NavLink[] = [
-  { label: "New", href: "/shop?filter=new" },
+  { label: "New", href: "/shop?filter=new", systemKey: "nav.new" },
   { label: "Hoodies", href: "/shop?category=Hoodies" },
   { label: "Jackets", href: "/shop?category=Jackets" },
   { label: "Footwear", href: "/shop?category=Footwear" },
-  { label: "Shop All", href: "/shop" },
+  { label: "Shop All", href: "/shop", systemKey: "nav.shopAll" },
 ];
 
 /**
@@ -27,12 +27,14 @@ export async function Navbar() {
     const topLevel = cats.filter((c) => c.parentId == null).slice(0, 4);
     if (topLevel.length) {
       links = [
-        { label: "New", href: "/shop?filter=new" },
+        // Category names stay exactly as stored by the admin (data is
+        // never machine-translated); only the system links are localized.
+        { label: "New", href: "/shop?filter=new", systemKey: "nav.new" },
         ...topLevel.map((c) => ({
           label: c.name,
           href: `/shop?category=${encodeURIComponent(c.name)}`,
         })),
-        { label: "Shop All", href: "/shop" },
+        { label: "Shop All", href: "/shop", systemKey: "nav.shopAll" },
       ];
     }
   } catch {

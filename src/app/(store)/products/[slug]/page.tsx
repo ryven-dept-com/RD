@@ -2,8 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProductBySlug } from "@/lib/queries";
-import { formatDate, formatPriceWithSymbol } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import { getStoreSettings } from "@/lib/settings";
+import { formatMoney, formatWholeMoney, isoCurrencyCode } from "@/lib/money";
+import {
+  LOCALE_COOKIE,
+  localeTag,
+  resolveLocale,
+  translate,
+} from "@/i18n/translations";
+import { cookies } from "next/headers";
 import { ProductCard } from "@/components/product-card";
 import { StarRating } from "@/components/star-rating";
 import { CheckIcon, RefreshIcon, TruckIcon } from "@/components/icons";
@@ -43,18 +51,28 @@ export default async function ProductPage({
   ]);
   if (!detail) notFound();
 
-  const formatPrice = (cents: number) =>
-    formatPriceWithSymbol(cents, store?.currency ?? "");
+  // Phase 9: resolve the visitor's language + use the centralized money
+  // formatter (cents → localized string, ISO-normalized currency).
+  let locale = resolveLocale(undefined);
+  try {
+    locale = resolveLocale((await cookies()).get(LOCALE_COOKIE)?.value);
+  } catch {
+    // default locale
+  }
+  const tr = (key: string, vars?: Record<string, string | number>) =>
+    translate(locale, key, vars);
+  const iso = isoCurrencyCode(store?.currency ?? "");
+  const formatPrice = (cents: number) => formatMoney(cents, locale, iso);
 
   const { product, reviews, avgRating, reviewCount, related } = detail;
   const onSale =
     product.compareAtPrice != null && product.compareAtPrice > product.price;
   const badge = product.isNew
-    ? "New"
+    ? tr("product.new")
     : product.bestSeller
-      ? "Best Seller"
+      ? tr("product.bestSeller")
       : onSale
-        ? "Sale"
+        ? tr("product.sale")
         : null;
 
   const dist = [5, 4, 3, 2, 1].map((star) => ({
@@ -67,7 +85,7 @@ export default async function ProductPage({
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <nav className="flex items-center gap-2 text-xs uppercase tracking-widest text-black/40">
           <Link href="/" className="hover:text-ink">
-            Home
+            {tr("shop.home")}
           </Link>
           <span>/</span>
           <Link
@@ -106,7 +124,14 @@ export default async function ProductPage({
               <StarRating rating={avgRating} size={16} />
               <span className="font-medium">{avgRating}</span>
               <span className="text-black/40">
-                ({reviewCount} {reviewCount === 1 ? "review" : "reviews"})
+                (
+                {tr(
+                  reviewCount === 1
+                    ? "product.reviewCountOne"
+                    : "product.reviewCountMany",
+                  { count: reviewCount },
+                )}
+                )
               </span>
             </a>
           )}
@@ -121,7 +146,9 @@ export default async function ProductPage({
                   {formatPrice(product.compareAtPrice!)}
                 </span>
                 <span className="rounded-full bg-amber/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-800">
-                  Save {formatPrice(product.compareAtPrice! - product.price)}
+                  {tr("product.save", {
+                    amount: formatPrice(product.compareAtPrice! - product.price),
+                  })}
                 </span>
               </>
             )}
@@ -149,14 +176,23 @@ export default async function ProductPage({
           {/* perks */}
           <div className="mt-8 grid grid-cols-1 gap-3 rounded-2xl border border-black/10 bg-brand-50 p-5 sm:grid-cols-3">
             {[
-              { icon: TruckIcon, label: "Free shipping over $150" },
-              { icon: RefreshIcon, label: "30-day easy returns" },
-              { icon: CheckIcon, label: "Secure checkout" },
-            ].map((p) => (
-              <div key={p.label} className="flex items-center gap-2.5">
-                <p.icon className="h-5 w-5 shrink-0 text-ink" />
+              {
+                icon: TruckIcon,
+                label: tr("product.perkShipping", {
+                  amount: formatWholeMoney(
+                    store?.freeShippingThreshold ?? 15000,
+                    locale,
+                    iso,
+                  ),
+                }),
+              },
+              { icon: RefreshIcon, label: tr("home.usp2Title") },
+              { icon: CheckIcon, label: tr("product.perkSecure") },
+            ].map((perk) => (
+              <div key={perk.label} className="flex items-center gap-2.5">
+                <perk.icon className="h-5 w-5 shrink-0 text-ink" />
                 <span className="text-xs font-medium text-black/70">
-                  {p.label}
+                  {perk.label}
                 </span>
               </div>
             ))}
@@ -166,7 +202,7 @@ export default async function ProductPage({
           {product.details.length > 0 && (
             <div className="mt-8">
               <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-                Product details
+                {tr("product.detailsTitle")}
               </h2>
               <ul className="mt-3 space-y-2">
                 {product.details.map((d) => (
@@ -188,7 +224,7 @@ export default async function ProductPage({
       <section id="reviews" className="border-t border-black/10 bg-brand-50 py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <h2 className="font-display text-4xl uppercase tracking-tight sm:text-5xl">
-            Reviews
+            {tr("product.reviewsTitle")}
           </h2>
 
           <div className="mt-8 grid gap-12 lg:grid-cols-[320px_1fr]">
@@ -202,7 +238,12 @@ export default async function ProductPage({
                   <div className="pb-1">
                     <StarRating rating={avgRating} size={16} />
                     <p className="mt-1 text-xs text-black/50">
-                      {reviewCount} {reviewCount === 1 ? "review" : "reviews"}
+                      {tr(
+                        reviewCount === 1
+                          ? "product.reviewCountOne"
+                          : "product.reviewCountMany",
+                        { count: reviewCount },
+                      )}
                     </p>
                   </div>
                 </div>
@@ -224,7 +265,7 @@ export default async function ProductPage({
                             }}
                           />
                         </div>
-                        <span className="w-5 text-right text-xs tabular-nums text-black/40">
+                        <span className="w-5 text-end text-xs tabular-nums text-black/40">
                           {d.count}
                         </span>
                       </div>
@@ -242,7 +283,7 @@ export default async function ProductPage({
             <div>
               {reviews.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-black/15 p-10 text-center text-sm text-black/50">
-                  No reviews yet. Be the first to share your thoughts.
+                  {tr("product.noReviews")}
                 </p>
               ) : (
                 <ul className="space-y-5">
@@ -262,14 +303,14 @@ export default async function ProductPage({
                               <StarRating rating={r.rating} size={13} />
                               {r.verified && (
                                 <span className="flex items-center gap-1 text-[11px] font-medium text-olive">
-                                  <CheckIcon className="h-3 w-3" /> Verified
+                                  <CheckIcon className="h-3 w-3" /> {tr("product.verified")}
                                 </span>
                               )}
                             </div>
                           </div>
                         </div>
                         <span className="text-xs text-black/40">
-                          {formatDate(r.createdAt)}
+                          {formatDate(r.createdAt, localeTag(locale))}
                         </span>
                       </div>
                       {r.title && (
@@ -291,7 +332,7 @@ export default async function ProductPage({
       {related.length > 0 && (
         <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
           <h2 className="font-display text-3xl uppercase tracking-tight sm:text-4xl">
-            You might also like
+            {tr("product.relatedTitle")}
           </h2>
           <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-4">
             {related.map((p, i) => (

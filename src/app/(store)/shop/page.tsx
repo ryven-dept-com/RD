@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import Link from "next/link";
 import {
   getActiveCategoryByRef,
@@ -15,6 +15,7 @@ import {
   SearchBar,
   SortSelect,
 } from "./shop-controls";
+import { LOCALE_COOKIE, resolveLocale, translate } from "@/i18n/translations";
 
 export const dynamic = "force-dynamic";
 
@@ -139,8 +140,19 @@ export default async function ShopPage({
       ) ?? null
     : null;
 
+  // Phase 9: system headings follow the visitor's language; category and
+  // collection names are admin DATA and stay exactly as stored.
+  let locale = resolveLocale(undefined);
+  try {
+    locale = resolveLocale((await cookies()).get(LOCALE_COOKIE)?.value);
+  } catch {
+    // default locale
+  }
+  const tr = (key: string, vars?: Record<string, string | number>) =>
+    translate(locale, key, vars);
+
   const heading = filters.q
-    ? `Search: “${filters.q}”`
+    ? tr("shop.searchResults", { q: filters.q })
     : activeCategory
       ? activeCategory.name
       : filters.category
@@ -148,12 +160,12 @@ export default async function ShopPage({
         : filters.collection
           ? filters.collection
           : filters.filter === "new"
-            ? "New Arrivals"
+            ? tr("shop.newArrivals")
             : filters.filter === "best"
-              ? "Best Sellers"
+              ? tr("shop.bestSellers")
               : filters.filter === "sale"
-                ? "On Sale"
-                : "Shop All";
+                ? tr("shop.onSale")
+                : tr("nav.shopAll");
 
   return (
     <div className="bg-bone pt-16">
@@ -162,7 +174,7 @@ export default async function ShopPage({
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <nav className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-black/40">
             <Link href="/" className="hover:text-ink">
-              Home
+              {tr("shop.home")}
             </Link>
             <span>/</span>
             <span className="text-ink">{heading}</span>
@@ -171,8 +183,7 @@ export default async function ShopPage({
             {heading}
           </h1>
           <p className="mt-2 max-w-xl text-sm text-black/50">
-            {products.length} {products.length === 1 ? "piece" : "pieces"} — heavyweight
-            construction, refined fits, built to last.
+            {tr("shop.subtitle", { count: products.length })}
           </p>
           {activeCategory?.description && (
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60">
@@ -197,17 +208,16 @@ export default async function ShopPage({
           {products.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-black/15 py-24 text-center">
               <p className="font-display text-3xl uppercase tracking-wide">
-                Nothing here yet
+                {tr("shop.nothingHere")}
               </p>
               <p className="max-w-sm text-sm text-black/50">
-                No products match these filters. Try clearing them to see the
-                full range.
+                {tr("shop.noResults")}
               </p>
               <Link
                 href="/shop"
                 className="rounded-full bg-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest text-bone"
               >
-                View all products
+                {tr("shop.viewAll")}
               </Link>
             </div>
           ) : (

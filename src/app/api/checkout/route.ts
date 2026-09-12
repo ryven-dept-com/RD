@@ -7,6 +7,7 @@ import {
 } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { getStoreSettings } from "@/lib/settings";
+import { isoCurrencyCode } from "@/lib/money";
 import { makeEventId } from "@/lib/pixel-events";
 import { sendMetaPurchaseServerEvent } from "@/lib/meta-capi";
 import {
@@ -352,7 +353,9 @@ export async function POST(request: Request) {
           // Phase 7 snapshots: payment is cash-on-delivery (the store's real
           // checkout method) and the currency is fixed at purchase time.
           paymentMethod: "cod",
-          currency: store ? store.currency : "",
+          // New orders snapshot the ISO currency code (Phase 9); historical
+          // rows keep whatever they stored and are never rewritten.
+          currency: store ? isoCurrencyCode(store.currency) : "",
         })
         .returning();
     }).catch((err) => {
@@ -409,7 +412,7 @@ export async function POST(request: Request) {
         subtotal,
         shipping,
         total,
-        currency: store ? store.currency : "",
+        currency: store ? isoCurrencyCode(store.currency) : "",
         purchaseEventId,
       },
       { status: 201 },

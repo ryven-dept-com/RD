@@ -2082,6 +2082,185 @@ async function main() {
   ).then((r) => r.json());
   check("historical orders still load after the UX change", legacyStill.total === 1);
 
+  section("15) Phase 9 — languages (AR/FR/EN, RTL) & centralized DZD currency");
+
+  const AR = { cookie: "rd-locale=ar" };
+  const FR = { cookie: "rd-locale=fr" };
+  const fetchHtml = async (p, cookie) => {
+    const r = await jfetch(`${BASE}${p}`, cookie ? { headers: { cookie } } : {});
+    return { status: r.status, text: await r.text() };
+  };
+
+  // A. Default (no cookie) renders LTR English — existing URLs unchanged.
+  const homeDefault = await fetchHtml("/");
+  check(
+    "default SSR is English LTR (no /ar /fr /en URL scheme)",
+    homeDefault.status === 200 &&
+      /<html[^>]*lang="en"[^>]*dir="ltr"|<html[^>]*dir="ltr"[^>]*lang="en"/.test(homeDefault.text),
+  );
+
+  // B. Language persisted via rd-locale cookie → SSR flips lang/dir.
+  const homeAr = await fetchHtml("/", AR.cookie);
+  check(
+    "AR cookie renders <html lang=ar dir=rtl> (RTL)",
+    homeAr.status === 200 && /<html[^>]*lang="ar"/.test(homeAr.text) && /<html[^>]*dir="rtl"/.test(homeAr.text),
+  );
+  check(
+    "AR home shows translated UI (USP + threshold in DZD)",
+    homeAr.text.includes("شحن سريع مجاني") && homeAr.text.includes("دج"),
+  );
+  check(
+    "AR navbar translates system links, keeps category data",
+    homeAr.text.includes("تسوّق الكل") && homeAr.text.includes("Hoodies"),
+  );
+
+  const homeFr = await fetchHtml("/", FR.cookie);
+  check(
+    "FR cookie renders <html lang=fr dir=ltr>",
+    homeFr.status === 200 && /<html[^>]*lang="fr"/.test(homeFr.text) && /<html[^>]*dir="ltr"/.test(homeFr.text),
+  );
+  check(
+    "FR home shows translated UI + French number format",
+    homeFr.text.includes("Livraison express gratuite") && homeFr.text.includes("15 000 DA"),
+  );
+
+  // C. Language switcher present + cookie contract shipped to the client.
+  const homeChunks = [
+    ...new Set(homeDefault.text.match(/\/_next\/static\/chunks\/[^"]+\.js/g) ?? []),
+  ];
+  let homeBundle = "";
+  for (const src of homeChunks.slice(0, 12)) {
+    try { homeBundle += await (await jfetch(`${BASE}${src}`)).text(); } catch {}
+  }
+  check(
+    "language switcher rendered (AR/FR/EN buttons)",
+    homeDefault.text.includes("العربية") &&
+      homeDefault.text.includes(">FR<") &&
+      homeDefault.text.includes(">EN<"),
+  );
+  check(
+    "client persists language in the rd-locale cookie",
+    homeBundle.includes("rd-locale") && homeBundle.includes("SameSite=Lax"),
+  );
+
+  // D. No locale URL prefixes: /ar and /fr are NOT routes.
+  const arRoute = await fetchHtml("/ar");
+  const frRoute = await fetchHtml("/fr");
+  check(
+    "no /ar or /fr locale URL structure (both 404)",
+    arRoute.status === 404 && frRoute.status === 404,
+    JSON.stringify({ ar: arRoute.status, fr: frRoute.status }),
+  );
+
+  // E. Translated shop + checkout SSR per locale.
+  const shopAr = await fetchHtml("/shop", AR.cookie);
+  check(
+    "AR shop heading translated (system text, not data)",
+    shopAr.status === 200 && shopAr.text.includes("تسوّق الكل"),
+  );
+  const checkoutAr = await fetchHtml("/checkout", AR.cookie);
+  check(
+    "AR checkout SSR shows translated empty-bag state",
+    checkoutAr.status === 200 && checkoutAr.text.includes("سلتك فارغة"),
+  );
+  const pdpFr = await fetchHtml(`/products/${slug}`, FR.cookie);
+  check(
+    "FR product page translates BUY NOW + uses centralized formatter",
+    pdpFr.status === 200 && pdpFr.text.includes("Acheter") && pdpFr.text.includes("DA"),
+  );
+  const pdpAr = await fetchHtml(`/products/${slug}`, AR.cookie);
+  check(
+    "AR product page translates BUY NOW + shows Arabic symbol",
+    pdpAr.status === 200 && pdpAr.text.includes("اشترِ الآن") && pdpAr.text.includes("دج"),
+  );
+
+  // F. Currency is machine-readable ISO everywhere (UI never leaks to Meta).
+  const catalog = await jfetch(`${BASE}/api/catalog`).then((r) => r.text());
+  const catRows = parseCsv(catalog);
+  const catPriceIdx = catRows[0]?.findIndex((h) => h === "price") ?? -1;
+  check(
+    "catalog feed prices use ISO DZD (machine-readable)",
+    catPriceIdx > 0 &&
+      catRows.length > 1 &&
+      catRows.slice(1).every((row) => (row[catPriceIdx] ?? "").endsWith(" DZD")),
+    JSON.stringify({ sample: catRows[1]?.[catPriceIdx] }),
+  );
+
+  // Resolve a purchasable variant for the locale-checkout orders.
+  let i18nDetail = null;
+  for (let id = 1; id <= 20; id += 1) {
+    const d = await jfetch(`${BASE}/api/admin/products/${id}`, { headers: adminHeaders })
+      .then((r) => r.json().catch(() => ({})));
+    if (d?.product?.slug === slug) { i18nDetail = d; break; }
+  }
+  const i18nVariant = (i18nDetail?.variants || []).find((v) => v.active && v.stock >= 2);
+  check("resolved a purchasable variant for locale checkout tests", Boolean(i18nVariant));
+
+  const checkoutWithLocale = async (localeCookie, name, phone) =>
+    jfetch(`${BASE}/api/checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: localeCookie },
+      body: JSON.stringify({
+        fullName: name,
+        phone,
+        commune: "Hammam Dalaa",
+        deliveryZone: 28,
+        deliveryMethod: "home",
+        items: [{
+          slug,
+          size: i18nVariant.size,
+          color: i18nVariant.color,
+          quantity: 1,
+          variantId: i18nVariant.id,
+          sku: i18nVariant.sku,
+        }],
+      }),
+    }).then((r) => r.json());
+
+  const orderAr = await checkoutWithLocale(AR.cookie, "مشتري عربي", "+213555000021");
+  const orderFr = await checkoutWithLocale(FR.cookie, "Acheteur Français", "+213555000022");
+  check(
+    "4-field checkout still works under AR and FR locale cookies",
+    orderAr.ok === true && orderFr.ok === true,
+    JSON.stringify({ ar: orderAr.error, fr: orderFr.error }),
+  );
+  check(
+    "checkout responses snapshot ISO currency DZD with numeric totals",
+    orderAr.currency === "DZD" && orderFr.currency === "DZD" &&
+      typeof orderAr.total === "number" && typeof orderFr.total === "number" &&
+      Number.isFinite(orderAr.shipping) && Number.isFinite(orderAr.subtotal),
+    JSON.stringify({ currency: orderAr.currency, total: orderAr.total }),
+  );
+  check(
+    "checkout response shape unchanged (ok/orderNumber/subtotal/shipping/total/currency/purchaseEventId)",
+    ["ok", "orderNumber", "subtotal", "shipping", "total", "currency", "purchaseEventId"]
+      .every((k) => k in orderAr),
+  );
+  check(
+    "Meta Purchase dedupe key returned under every locale",
+    typeof orderAr.purchaseEventId === "string" && orderAr.purchaseEventId.length > 0 &&
+      typeof orderFr.purchaseEventId === "string" && orderFr.purchaseEventId.length > 0,
+  );
+
+  // G. New orders snapshot DZD; historical rows untouched.
+  const i18nList = await jfetch(
+    `${BASE}/api/admin/orders?q=${encodeURIComponent(orderAr.orderNumber)}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const i18nOrder = await jfetch(
+    `${BASE}/api/admin/orders/${i18nList.orders?.[0]?.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "new order stores ISO currency snapshot (DZD)",
+    i18nOrder.order?.currency === "DZD",
+    JSON.stringify({ currency: i18nOrder.order?.currency }),
+  );
+  const legacyAfterI18n = await jfetch(`${BASE}/api/admin/orders?q=RVN-LEGACY7`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check("historical orders unaffected by currency change", legacyAfterI18n.total === 1);
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

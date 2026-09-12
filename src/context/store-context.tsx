@@ -6,7 +6,8 @@ import {
   useMemo,
   type ReactNode,
 } from "react";
-import { formatPriceWithSymbol } from "@/lib/format";
+import { formatMoney, isoCurrencyCode } from "@/lib/money";
+import { useLanguage } from "@/i18n/language-context";
 
 /**
  * Storefront configuration provided by the server (read from the database in
@@ -63,8 +64,14 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
 };
 
 type StoreContextValue = StoreConfig & {
-  /** Format a price (stored in cents) using the configured currency symbol. */
+  /** Format a price (stored in cents) for the current UI language. */
   formatPrice: (cents: number) => string;
+  /**
+   * ISO-4217 currency code (default DZD) — the ONLY currency value allowed
+   * in Meta Pixel/CAPI payloads, the catalog feed and order snapshots.
+   * Never send the localized display symbol ("DA"/"دج") to Meta.
+   */
+  currencyCode: string;
 };
 
 const StoreContext = createContext<StoreContextValue | null>(null);
@@ -78,12 +85,15 @@ export function StoreConfigProvider({
   config: StoreConfig;
   children: ReactNode;
 }) {
+  const { locale } = useLanguage();
   const value = useMemo<StoreContextValue>(
     () => ({
       ...config,
-      formatPrice: (cents: number) => formatPriceWithSymbol(cents, config.currency),
+      formatPrice: (cents: number) =>
+        formatMoney(cents, locale, isoCurrencyCode(config.currency)),
+      currencyCode: isoCurrencyCode(config.currency),
     }),
-    [config],
+    [config, locale],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

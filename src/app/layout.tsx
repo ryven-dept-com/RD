@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
 import { Anton, Inter } from "next/font/google";
 import { getStoreSettings } from "@/lib/settings";
+import { LanguageProvider } from "@/i18n/language-context";
+import { LOCALE_COOKIE, localeDir, resolveLocale } from "@/i18n/translations";
 import "./globals.css";
 
 const inter = Inter({
@@ -70,10 +73,22 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Phase 9: the storefront language persists in a cookie; SSR renders the
+  // matching lang/dir so Arabic pages arrive RTL without any client flicker.
+  let locale = resolveLocale(undefined);
+  try {
+    const cookieStore = await cookies();
+    locale = resolveLocale(cookieStore.get(LOCALE_COOKIE)?.value);
+  } catch {
+    // cookies unavailable — fall back to the default locale
+  }
+
   return (
-    <html lang="en" className={`${inter.variable} ${anton.variable}`}>
-      <body className="bg-bone text-ink antialiased">{children}</body>
+    <html lang={locale} dir={localeDir(locale)} className={`${inter.variable} ${anton.variable}`}>
+      <body className="bg-bone text-ink antialiased">
+        <LanguageProvider initialLocale={locale}>{children}</LanguageProvider>
+      </body>
     </html>
   );
 }

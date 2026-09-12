@@ -12,6 +12,7 @@ import {
   wasPurchaseTracked,
 } from "@/lib/pixel-events";
 import { ArrowRightIcon, CheckIcon, ShieldIcon } from "@/components/icons";
+import { useT } from "@/i18n/language-context";
 
 const SHIPPING_FLAT = 995;
 
@@ -47,8 +48,9 @@ export function CheckoutClient() {
     freeShippingThreshold,
     minOrderAmount,
     pixel,
-    currency,
+    currencyCode,
   } = useStoreConfig();
+  const t = useT();
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -82,14 +84,17 @@ export function CheckoutClient() {
       .then((data) => {
         if (cancelled) return;
         if (data.ok && Array.isArray(data.zones)) setZones(data.zones);
-        else setZonesError("Delivery zones are unavailable right now.");
+        else setZonesError(t("checkout.zonesError"));
       })
       .catch(() => {
-        if (!cancelled) setZonesError("Delivery zones are unavailable right now.");
+        if (!cancelled) setZonesError(t("checkout.zonesError"));
       });
     return () => {
       cancelled = true;
     };
+    // Fetches once per checkout visit; the translated error message uses the
+    // locale active when checkout loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const quoteKey = deliveryZone
@@ -146,7 +151,7 @@ export function CheckoutClient() {
             price: i.price,
             quantity: i.quantity,
           })),
-          currency,
+          currencyCode,
         ),
       );
     }
@@ -191,10 +196,10 @@ export function CheckoutClient() {
       if (!res.ok || !data.ok) {
         if (data.error === "ORDER_BELOW_MINIMUM") {
           throw new Error(
-            `The minimum order amount is ${formatPrice(minOrderAmount)}`,
+            t("checkout.minOrder", { amount: formatPrice(minOrderAmount) }),
           );
         }
-        throw new Error(data.error ?? "Checkout failed");
+        throw new Error(data.error ?? t("checkout.errorDefault"));
       }
       setConfirmation({
         orderNumber: data.orderNumber,
@@ -224,14 +229,14 @@ export function CheckoutClient() {
               quantity: i.quantity,
             })),
             total: data.total,
-            currency: data.currency || currency,
+            currency: data.currency || currencyCode,
             eventId: data.purchaseEventId,
           }),
         );
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Checkout failed");
+      setError(err instanceof Error ? err.message : t("checkout.errorDefault"));
     } finally {
       setSubmitting(false);
     }
@@ -246,38 +251,36 @@ export function CheckoutClient() {
             <CheckIcon className="h-8 w-8" />
           </div>
           <h1 className="mt-6 font-display text-4xl uppercase tracking-tight sm:text-5xl">
-            Order confirmed
+            {t("checkout.confirmedTitle")}
           </h1>
           <p className="mt-3 text-black/60">
-            Thanks for your order. We&apos;ll call you on{" "}
-            <strong className="text-ink">{confirmation.phone}</strong> to
-            confirm delivery.
+            {t("checkout.confirmedText", { phone: confirmation.phone })}
           </p>
 
-          <div className="mt-8 rounded-2xl border border-black/10 bg-brand-50 p-6 text-left">
+          <div className="mt-8 rounded-2xl border border-black/10 bg-brand-50 p-6 text-start">
             <div className="flex items-center justify-between border-b border-black/10 pb-4">
-              <span className="text-sm text-black/50">Order number</span>
+              <span className="text-sm text-black/50">{t("checkout.orderNumber")}</span>
               <span className="font-display text-lg tracking-wide">
                 {confirmation.orderNumber}
               </span>
             </div>
             <dl className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between">
-                <dt className="text-black/50">Subtotal</dt>
+                <dt className="text-black/50">{t("checkout.subtotal")}</dt>
                 <dd className="tabular-nums">
                   {formatPrice(confirmation.subtotal)}
                 </dd>
               </div>
               <div className="flex justify-between">
-                <dt className="text-black/50">Shipping</dt>
+                <dt className="text-black/50">{t("checkout.shipping")}</dt>
                 <dd className="tabular-nums">
                   {confirmation.shipping === 0
-                    ? "Free"
+                    ? t("checkout.free")
                     : formatPrice(confirmation.shipping)}
                 </dd>
               </div>
               <div className="flex justify-between border-t border-black/10 pt-3 text-base font-semibold">
-                <dt>Total</dt>
+                <dt>{t("checkout.total")}</dt>
                 <dd className="tabular-nums">
                   {formatPrice(confirmation.total)}
                 </dd>
@@ -289,8 +292,8 @@ export function CheckoutClient() {
             href="/shop"
             className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-8 py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-105"
           >
-            Continue shopping
-            <ArrowRightIcon className="h-4 w-4" />
+            {t("cart.continueShopping")}
+            <ArrowRightIcon className="h-4 w-4 rtl:-scale-x-100" />
           </Link>
         </div>
       </div>
@@ -303,17 +306,17 @@ export function CheckoutClient() {
       <div className="min-h-screen bg-bone pt-16">
         <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
           <h1 className="font-display text-4xl uppercase tracking-tight sm:text-5xl">
-            Your bag is empty
+            {t("checkout.emptyTitle")}
           </h1>
           <p className="mt-3 text-black/60">
-            Add a few pieces before heading to checkout.
+            {t("checkout.emptyText")}
           </p>
           <Link
             href="/shop"
             className="mt-8 inline-flex items-center gap-2 rounded-full bg-ink px-8 py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-105"
           >
-            Shop the collection
-            <ArrowRightIcon className="h-4 w-4" />
+            {t("checkout.shopCollection")}
+            <ArrowRightIcon className="h-4 w-4 rtl:-scale-x-100" />
           </Link>
         </div>
       </div>
@@ -328,13 +331,12 @@ export function CheckoutClient() {
     <div className="min-h-screen bg-bone pt-16">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <h1 className="font-display text-4xl uppercase tracking-tight sm:text-5xl">
-          Checkout
+          {t("checkout.title")}
         </h1>
 
         {belowMinimum && (
           <p className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-            The minimum order amount is {formatPrice(minOrderAmount)}. Add more
-            items to continue.
+            {t("checkout.minOrder", { amount: formatPrice(minOrderAmount) })}
           </p>
         )}
 
@@ -343,28 +345,28 @@ export function CheckoutClient() {
           <form onSubmit={submit} className="space-y-8">
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-                Contact
+                {t("checkout.contact")}
               </h2>
               <input
                 type="tel"
                 required
                 value={form.phone}
                 onChange={set("phone")}
-                placeholder="Phone number (required)"
+                placeholder={t("checkout.phone")}
                 className={`mt-3 ${inputClass}`}
               />
             </section>
 
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-                Shipping address
+                {t("checkout.shippingAddress")}
               </h2>
               <div className="mt-3 space-y-3">
                 <input
                   required
                   value={form.fullName}
                   onChange={set("fullName")}
-                  placeholder="Full name"
+                  placeholder={t("checkout.fullName")}
                   className={inputClass}
                 />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -384,15 +386,15 @@ export function CheckoutClient() {
                         }
                       }
                     }}
-                    aria-label="Wilaya / delivery zone"
+                    aria-label={t("checkout.wilayaLabel")}
                     className={inputClass}
                   >
                     <option value="">
                       {zonesError
-                        ? "Wilaya — unavailable"
+                        ? t("checkout.wilayaUnavailable")
                         : zones.length === 0
-                          ? "Loading wilayas…"
-                          : "Select wilaya"}
+                          ? t("checkout.loadingWilayas")
+                          : t("checkout.selectWilaya")}
                     </option>
                     {zones.map((z) => (
                       <option key={z.code} value={String(z.code)}>
@@ -405,7 +407,7 @@ export function CheckoutClient() {
                     required
                     value={commune}
                     onChange={(e) => setCommune(e.target.value)}
-                    placeholder="Commune"
+                    placeholder={t("checkout.commune")}
                     className={inputClass}
                   />
                 </div>
@@ -418,12 +420,11 @@ export function CheckoutClient() {
             {/* Phase 8: delivery method (server-priced, per zone) */}
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-                Delivery
+                {t("checkout.delivery")}
               </h2>
               {!deliveryZone ? (
                 <p className="mt-3 rounded-xl border border-black/10 bg-brand-50 px-4 py-4 text-sm text-black/55">
-                  Select your wilaya above to see available delivery methods
-                  and prices.
+                  {t("checkout.selectWilayaHint")}
                 </p>
               ) : selectedZone ? (
                 <div className="mt-3 space-y-3">
@@ -451,26 +452,29 @@ export function CheckoutClient() {
                           />
                           <span>
                             <span className="block text-sm font-semibold uppercase tracking-wide">
-                              {m === "home" ? "Home Delivery" : "Pickup / Office"}
+                              {m === "home"
+                                ? t("checkout.homeDelivery")
+                                : t("checkout.pickupOffice")}
                             </span>
                             <span className="block text-xs text-black/50">
-                              {info.estimatedTime || "Standard delivery time"}
+                              {info.estimatedTime || t("checkout.standardTime")}
                             </span>
                           </span>
                         </span>
                         <span className="text-sm font-semibold tabular-nums">
-                          {free ? "Free" : formatPrice(info.price)}
+                          {free ? t("checkout.free") : formatPrice(info.price)}
                         </span>
                       </label>
                     );
                   })}
                   {quoteBusy && (
-                    <p className="text-xs text-black/40">Updating shipping…</p>
+                    <p className="text-xs text-black/40">{t("checkout.updatingShipping")}</p>
                   )}
                   {effectiveQuote?.estimatedTime && !quoteBusy && (
                     <p className="text-xs text-black/50">
-                      Estimated delivery:{" "}
-                      <strong>{effectiveQuote.estimatedTime}</strong>
+                      {t("checkout.estimatedDelivery", {
+                        time: effectiveQuote.estimatedTime,
+                      })}
                     </p>
                   )}
                 </div>
@@ -479,28 +483,27 @@ export function CheckoutClient() {
 
             <section>
               <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-                Payment
+                {t("checkout.payment")}
               </h2>
               {codEnabled ? (
                 <div className="mt-3 rounded-xl border border-black/10 bg-brand-50 px-4 py-4">
                   <p className="text-sm font-semibold uppercase tracking-wide">
-                    Cash on delivery
+                    {t("checkout.codTitle")}
                   </p>
                   <p className="mt-1 text-sm text-black/55">
-                    Pay in cash when your order arrives. No card needed.
+                    {t("checkout.codDesc")}
                   </p>
                 </div>
               ) : (
                 <>
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-black/40">
-                    <ShieldIcon className="h-3.5 w-3.5" /> Demo checkout — no
-                    real card is charged.
+                    <ShieldIcon className="h-3.5 w-3.5" /> {t("checkout.demoNote")}
                   </p>
                   <div className="mt-3 space-y-3">
                     <input
                       value={form.card}
                       onChange={set("card")}
-                      placeholder="Card number"
+                      placeholder={t("checkout.cardNumber")}
                       inputMode="numeric"
                       className={inputClass}
                     />
@@ -508,13 +511,13 @@ export function CheckoutClient() {
                       <input
                         value={form.exp}
                         onChange={set("exp")}
-                        placeholder="MM / YY"
+                        placeholder={t("checkout.cardExp")}
                         className={inputClass}
                       />
                       <input
                         value={form.cvc}
                         onChange={set("cvc")}
-                        placeholder="CVC"
+                        placeholder={t("checkout.cardCvc")}
                         inputMode="numeric"
                         className={inputClass}
                       />
@@ -536,12 +539,12 @@ export function CheckoutClient() {
               className="group flex w-full items-center justify-center gap-2 rounded-full bg-ink py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.01] disabled:opacity-50"
             >
               {submitting
-                ? "Placing order…"
+                ? t("checkout.placingOrder")
                 : codEnabled
-                  ? "Place order"
-                  : `Pay ${formatPrice(total)}`}
+                  ? t("checkout.placeOrder")
+                  : t("checkout.pay", { amount: formatPrice(total) })}
               {!submitting && (
-                <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1 rtl:-scale-x-100" />
               )}
             </button>
           </form>
@@ -550,7 +553,7 @@ export function CheckoutClient() {
           <div className="lg:sticky lg:top-24 lg:h-fit">
             <div className="rounded-2xl border border-black/10 bg-brand-50 p-6">
               <h2 className="font-display text-lg uppercase tracking-wide">
-                Order summary
+                {t("checkout.orderSummary")}
               </h2>
               <ul className="mt-4 space-y-4">
                 {items.map((item) => (
@@ -562,7 +565,7 @@ export function CheckoutClient() {
                         alt={item.name}
                         className="h-full w-full object-cover"
                       />
-                      <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[10px] font-bold text-bone">
+                      <span className="absolute -end-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[10px] font-bold text-bone">
                         {item.quantity}
                       </span>
                     </div>
@@ -583,35 +586,37 @@ export function CheckoutClient() {
 
               <dl className="mt-6 space-y-2 border-t border-black/10 pt-4 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-black/50">Subtotal</dt>
+                  <dt className="text-black/50">{t("checkout.subtotal")}</dt>
                   <dd className="tabular-nums">{formatPrice(subtotal)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-black/50">
-                    Shipping
+                    {t("checkout.shipping")}
                     {effectiveQuote && deliveryMethod === "office" && (
                       <span className="block text-[11px] normal-case tracking-normal text-black/40">
-                        Pickup / Office
+                        {t("checkout.pickupOffice")}
                       </span>
                     )}
                     {effectiveQuote && deliveryMethod === "home" && (
                       <span className="block text-[11px] normal-case tracking-normal text-black/40">
-                        Home Delivery
+                        {t("checkout.homeDelivery")}
                       </span>
                     )}
                   </dt>
                   <dd className="tabular-nums">
-                    {quoteBusy ? "…" : shipping === 0 ? "Free" : formatPrice(shipping)}
+                    {quoteBusy ? "…" : shipping === 0 ? t("checkout.free") : formatPrice(shipping)}
                   </dd>
                 </div>
                 <div className="flex justify-between border-t border-black/10 pt-3 text-base font-semibold">
-                  <dt>Total</dt>
+                  <dt>{t("checkout.total")}</dt>
                   <dd className="font-display text-xl">{formatPrice(total)}</dd>
                 </div>
               </dl>
               {!deliveryZone && shipping > 0 && (
                 <p className="mt-3 text-xs text-black/40">
-                  Free shipping on orders over {formatPrice(freeShippingThreshold)}.
+                  {t("checkout.freeShipNote", {
+                    amount: formatPrice(freeShippingThreshold),
+                  })}
                 </p>
               )}
             </div>
