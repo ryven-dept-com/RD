@@ -3,7 +3,11 @@
 import { useEffect, useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
-import { trackPixelEvent } from "@/components/meta-pixel";
+import { trackBuiltPixelEvent } from "@/components/meta-pixel";
+import {
+  buildAddToCartEvent,
+  buildViewContentEvent,
+} from "@/lib/pixel-events";
 import { BagIcon, CheckIcon, MinusIcon, PlusIcon } from "@/components/icons";
 
 type PurchaseProps = {
@@ -15,11 +19,12 @@ type PurchaseProps = {
   sizes: string[];
   colors: string[];
   stock: number;
+  category: string;
 };
 
 export function ProductPurchase(props: PurchaseProps) {
   const { addItem } = useCart();
-  const { formatPrice, pixel } = useStoreConfig();
+  const { formatPrice, pixel, currency } = useStoreConfig();
   const [color, setColor] = useState(props.colors[0] ?? "Default");
   const [size, setSize] = useState<string>(
     props.sizes.length === 1 ? props.sizes[0] : "",
@@ -28,14 +33,21 @@ export function ProductPurchase(props: PurchaseProps) {
   const [error, setError] = useState(false);
   const [added, setAdded] = useState(false);
 
-  // ViewContent standard event for Meta Pixel.
+  // ViewContent standard event for Meta Pixel — real product identifier,
+  // name, price and the store's configured currency.
   useEffect(() => {
     if (pixel.enabled && pixel.events.viewContent) {
-      trackPixelEvent("ViewContent", {
-        content_ids: [props.slug],
-        content_type: "product",
-        value: props.price / 100,
-      });
+      trackBuiltPixelEvent(
+        buildViewContentEvent(
+          {
+            slug: props.slug,
+            name: props.name,
+            price: props.price,
+            category: props.category,
+          },
+          currency,
+        ),
+      );
     }
     // Fire once per product page visit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -58,12 +70,13 @@ export function ProductPurchase(props: PurchaseProps) {
       maxStock: props.stock,
     });
     if (pixel.enabled && pixel.events.addToCart) {
-      trackPixelEvent("AddToCart", {
-        content_ids: [props.slug],
-        content_type: "product",
-        value: (props.price * qty) / 100,
-        num_items: qty,
-      });
+      trackBuiltPixelEvent(
+        buildAddToCartEvent(
+          { slug: props.slug, name: props.name, price: props.price },
+          qty,
+          currency,
+        ),
+      );
     }
     setAdded(true);
     setTimeout(() => setAdded(false), 1800);

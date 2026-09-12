@@ -1,4 +1,9 @@
-import { getSettingsMap, SETTING_DEFS, SETTING_KEYS } from "@/lib/settings";
+import {
+  getSettingsMap,
+  SETTING_DEFS,
+  SETTING_KEYS,
+  SENSITIVE_SETTING_KEYS,
+} from "@/lib/settings";
 import { getCmsData } from "@/lib/cms";
 import { SettingsForm } from "./settings-form";
 
@@ -19,6 +24,13 @@ export default async function SettingsPage() {
     initial[key] = settingsMap[key] ?? SETTING_DEFS[key].defaultValue;
   }
 
+  // Secrets must never reach the browser: record only whether a token is
+  // configured, and blank the value before it enters the page payload.
+  const capiTokenConfigured = Boolean(initial.metaCapiAccessToken);
+  for (const key of SENSITIVE_SETTING_KEYS) {
+    initial[key] = "";
+  }
+
   const announcement = cms
     ? {
         enabled: cms.announcement.enabled,
@@ -35,7 +47,11 @@ export default async function SettingsPage() {
           Store configuration, checkout rules, branding, SEO and marketing
         </p>
       </div>
-      <SettingsForm initial={initial} announcement={announcement} />
+      <SettingsForm
+        initial={initial}
+        announcement={announcement}
+        capiTokenConfigured={capiTokenConfigured}
+      />
     </div>
   );
 }

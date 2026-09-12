@@ -16,7 +16,7 @@ import { settings } from "@/db/schema";
 // with empty strings is structurally impossible now).
 // ---------------------------------------------------------------------------
 
-export type SettingKind = "text" | "email" | "url" | "int" | "bool" | "pixelId";
+export type SettingKind = "text" | "email" | "url" | "int" | "bool" | "pixelId" | "secret";
 
 export type SettingDef = {
   kind: SettingKind;
@@ -67,7 +67,21 @@ export const SETTING_DEFS: Record<string, SettingDef> = {
   pixelEventAddToCart: { kind: "bool", defaultValue: "true", label: "AddToCart event" },
   pixelEventInitiateCheckout: { kind: "bool", defaultValue: "true", label: "InitiateCheckout event" },
   pixelEventPurchase: { kind: "bool", defaultValue: "true", label: "Purchase event" },
+
+  // ---- Meta Conversions API (server-side). The access token is a SECRET:
+  // it is stored server-side only and never returned by any API or page.
+  metaCapiEnabled: { kind: "bool", defaultValue: "false", label: "Meta Conversions API" },
+  metaCapiAccessToken: { kind: "secret", max: 500, defaultValue: "", label: "Conversions API access token" },
+  metaCapiTestEventCode: { kind: "text", max: 40, defaultValue: "", label: "Test event code" },
 };
+
+/**
+ * Keys holding secrets. They can be written through the settings API but
+ * are NEVER echoed back in responses, page props, or client state.
+ */
+export const SENSITIVE_SETTING_KEYS: ReadonlySet<string> = new Set([
+  "metaCapiAccessToken",
+]);
 
 export const SETTING_KEYS = Object.keys(SETTING_DEFS);
 
@@ -153,6 +167,15 @@ export function validateSetting(key: string, raw: unknown): ValidationResult {
       }
       return { ok: true, value };
     }
+    case "secret": {
+      if (value && /\s/.test(value)) {
+        return { ok: false, error: `${def.label}: must not contain spaces` };
+      }
+      if (value.length > (def.max ?? 500)) {
+        return { ok: false, error: `${def.label}: too long` };
+      }
+      return { ok: true, value };
+    }
   }
 }
 
@@ -201,12 +224,29 @@ export async function applySettingsPatch(
   }
 
   // Return the authoritative stored map so clients can re-sync from the
-  // database instead of trusting their own local state.
+  // database instead of trusting their own local state. Secrets are
+  // stripped — they must never travel back to the browser.
   const saved = await getSettingsMap();
   for (const key of SETTING_KEYS) {
     saved[key] ??= SETTING_DEFS[key].defaultValue;
   }
+  for (const key of SENSITIVE_SETTING_KEYS) {
+    delete saved[key];
+  }
   return { ok: true, saved };
+}
+
+/**
+ * Server-only accessor for secret settings (e.g. the Conversions API
+ * access token). Deliberately NOT part of getStoreSettings()/the typed
+ * storefront view so it cannot leak into client props.
+ */
+export async function getSettingSecret(key: string): Promise<string> {
+  if (!SENSITIVE_SETTING_KEYS.has(key)) {
+    throw new Error(`getSettingSecret called on non-secret key: ${key}`);
+  }
+  const map = await getSettingsMap();
+  return (map[key] ?? "").trim();
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +293,8 @@ export type StoreSettings = {
   metaPixelEnabled: boolean;
   metaPixelId: string;
   pixelEvents: PixelEvents;
+  metaCapiEnabled: boolean;
+  metaCapiTestEventCode: string;
 };
 
 function bool(map: Record<string, string>, key: string): boolean {
@@ -296,6 +338,8 @@ export async function getStoreSettings(): Promise<StoreSettings> {
     facebookUrl: (map.facebookUrl ?? "").trim(),
     metaPixelEnabled: bool(map, "metaPixelEnabled"),
     metaPixelId: (map.metaPixelId ?? "").trim(),
+    metaCapiEnabled: bool(map, "metaCapiEnabled"),
+    metaCapiTestEventCode: (map.metaCapiTestEventCode ?? "").trim(),
     pixelEvents: {
       pageView: bool(map, "pixelEventPageView"),
       viewContent: bool(map, "pixelEventViewContent"),

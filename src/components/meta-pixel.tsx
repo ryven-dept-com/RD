@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useStoreConfig } from "@/context/store-context";
+import { makeEventId } from "@/lib/pixel-events";
 
 declare global {
   interface Window {
@@ -17,15 +18,36 @@ declare global {
  * pixel is disabled, not configured, or blocked (ad blockers, offline).
  * Only the Pixel ID is ever used client-side — access tokens and other Meta
  * credentials are never stored or shipped to the browser.
+ *
+ * `eventId` is forwarded as Meta's `eventID` option so browser events can be
+ * deduplicated against server-side Conversions API events carrying the same
+ * ID (used for Purchase today; available for all events).
  */
-export function trackPixelEvent(event: string, data?: Record<string, unknown>) {
+export function trackPixelEvent(
+  event: string,
+  data?: Record<string, unknown>,
+  eventId?: string,
+) {
   try {
     if (typeof window !== "undefined" && typeof window.fbq === "function") {
-      window.fbq("track", event, data ?? {});
+      if (eventId) {
+        window.fbq("track", event, data ?? {}, { eventID: eventId });
+      } else {
+        window.fbq("track", event, data ?? {});
+      }
     }
   } catch {
     // Tracking must never break the storefront.
   }
+}
+
+/** Fire a pre-built event from src/lib/pixel-events.ts. */
+export function trackBuiltPixelEvent(built: {
+  eventName: string;
+  data: Record<string, unknown>;
+  eventId: string;
+}) {
+  trackPixelEvent(built.eventName, built.data, built.eventId);
 }
 
 function loadPixelScript(pixelId: string) {
@@ -75,7 +97,7 @@ export function MetaPixel() {
     if (!pixel.enabled || !pixel.id || !pixel.events.pageView) return;
     if (typeof window.fbq !== "function") return;
     try {
-      window.fbq("track", "PageView");
+      window.fbq("track", "PageView", {}, { eventID: makeEventId() });
     } catch {
       // ignore
     }

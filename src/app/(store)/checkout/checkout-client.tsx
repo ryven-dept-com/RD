@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { lineKey, useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
-import { trackPixelEvent } from "@/components/meta-pixel";
+import { trackBuiltPixelEvent } from "@/components/meta-pixel";
+import {
+  buildInitiateCheckoutEvent,
+  buildPurchaseEvent,
+  markPurchaseTracked,
+  wasPurchaseTracked,
+} from "@/lib/pixel-events";
 import { ArrowRightIcon, CheckIcon, ShieldIcon } from "@/components/icons";
 
 const SHIPPING_FLAT = 995;
@@ -27,6 +33,7 @@ export function CheckoutClient() {
     requirePhone,
     requireAddress,
     pixel,
+    currency,
   } = useStoreConfig();
 
   const [submitting, setSubmitting] = useState(false);
@@ -53,14 +60,21 @@ export function CheckoutClient() {
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [key]: e.target.value }));
 
-  // InitiateCheckout standard event.
+  // InitiateCheckout standard event — fires once when the checkout flow
+  // actually starts (page reached with a non-empty cart).
   useEffect(() => {
     if (items.length && pixel.enabled && pixel.events.initiateCheckout) {
-      trackPixelEvent("InitiateCheckout", {
-        value: subtotal / 100,
-        currency: "store",
-        num_items: items.length,
-      });
+      trackBuiltPixelEvent(
+        buildInitiateCheckoutEvent(
+          items.map((i) => ({
+            slug: i.slug,
+            name: i.name,
+            price: i.price,
+            quantity: i.quantity,
+          })),
+          currency,
+        ),
+      );
     }
     // Fire once per checkout visit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -107,12 +121,30 @@ export function CheckoutClient() {
         email: form.email,
       });
       clearCart();
-      if (pixel.enabled && pixel.events.purchase) {
-        trackPixelEvent("Purchase", {
-          value: data.total / 100,
-          currency: "store",
-          content_ids: items.map((i) => i.slug),
-        });
+      // Purchase event — only after a real order was created. Guarded per
+      // order number so refresh/reload/back-forward never fires it twice.
+      // The eventId comes from the order API and is shared with the
+      // server-side Conversions API event for Meta deduplication.
+      if (
+        pixel.enabled &&
+        pixel.events.purchase &&
+        !wasPurchaseTracked(data.orderNumber)
+      ) {
+        markPurchaseTracked(data.orderNumber);
+        trackBuiltPixelEvent(
+          buildPurchaseEvent({
+            orderNumber: data.orderNumber,
+            items: items.map((i) => ({
+              slug: i.slug,
+              name: i.name,
+              price: i.price,
+              quantity: i.quantity,
+            })),
+            total: data.total,
+            currency: data.currency || currency,
+            eventId: data.purchaseEventId,
+          }),
+        );
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {

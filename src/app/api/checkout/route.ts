@@ -2,6 +2,8 @@ import { db } from "@/db";
 import { orders, products, type OrderItem } from "@/db/schema";
 import { inArray } from "drizzle-orm";
 import { getStoreSettings } from "@/lib/settings";
+import { makeEventId } from "@/lib/pixel-events";
+import { sendMetaPurchaseServerEvent } from "@/lib/meta-capi";
 
 export const dynamic = "force-dynamic";
 
@@ -144,6 +146,30 @@ export async function POST(request: Request) {
       })
       .returning();
 
+    // Meta Ads tracking: one event ID shared by the browser Pixel Purchase
+    // event and the server-side Conversions API event so Meta deduplicates
+    // them instead of double-counting revenue.
+    const purchaseEventId = makeEventId();
+    void sendMetaPurchaseServerEvent({
+      request,
+      orderNumber: order.orderNumber,
+      email: String(body.email ?? "").trim(),
+      phone: String(body.phone ?? "").trim(),
+      city: String(body.city ?? "").trim(),
+      country: String(body.country ?? "").trim(),
+      postalCode: String(body.postalCode ?? "").trim(),
+      items: orderItems.map((i) => ({
+        slug: i.slug,
+        name: i.name,
+        price: i.price,
+        quantity: i.quantity,
+      })),
+      total,
+      eventId: purchaseEventId,
+    }).catch((err) => {
+      console.error("[meta-capi] purchase event failed:", err);
+    });
+
     return Response.json(
       {
         ok: true,
@@ -151,6 +177,8 @@ export async function POST(request: Request) {
         subtotal,
         shipping,
         total,
+        currency: store ? store.currency : "",
+        purchaseEventId,
       },
       { status: 201 },
     );

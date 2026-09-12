@@ -84,9 +84,11 @@ function Toggle({
 export function SettingsForm({
   initial,
   announcement,
+  capiTokenConfigured,
 }: {
   initial: SettingsState;
   announcement: AnnouncementState;
+  capiTokenConfigured: boolean;
 }) {
   const { adminFetch } = useAdmin();
 
@@ -128,9 +130,15 @@ export function SettingsForm({
     setSaved(false);
     setError("");
     try {
+      // Secret fields are sent only when the admin actually typed a new
+      // value — a blank field means "keep the stored token".
+      const payload: SettingsState = { ...form };
+      if (!payload.metaCapiAccessToken) {
+        delete payload.metaCapiAccessToken;
+      }
       const res = await adminFetch("/api/admin/settings", {
         method: "PUT",
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok) {
@@ -631,6 +639,73 @@ export function SettingsForm({
             checked={form.pixelEventPurchase !== "false"}
             onChange={setBool("pixelEventPurchase")}
           />
+        </div>
+
+        <div className="border-t border-slate-100 pt-4">
+          <h3 className="text-sm font-semibold text-slate-800">
+            Conversions API (server-side events)
+          </h3>
+          <p className="mt-1 text-xs text-slate-400">
+            Sends a server-side Purchase event that shares its event ID with
+            the browser Pixel, so Meta deduplicates them. The access token is
+            stored on the server only and never sent to the browser.
+          </p>
+          <div className="mt-3 space-y-3">
+            <Toggle
+              label="Enable Conversions API"
+              checked={form.metaCapiEnabled === "true"}
+              onChange={setBool("metaCapiEnabled")}
+            />
+            <div>
+              <label className={labelCls} htmlFor="metaCapiAccessToken">
+                Access token
+              </label>
+              <input
+                id="metaCapiAccessToken"
+                type="password"
+                autoComplete="off"
+                value={form.metaCapiAccessToken}
+                onChange={set("metaCapiAccessToken")}
+                placeholder={
+                  capiTokenConfigured
+                    ? "Token stored securely — enter a new value to replace it"
+                    : "System user access token (EAAB…)"
+                }
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-slate-400">
+                {capiTokenConfigured
+                  ? "A token is currently configured. Leave the field empty to keep it."
+                  : "Use a Meta system user token with ads_management access. It is never shown again after saving."}
+              </p>
+            </div>
+            <div>
+              <label className={labelCls} htmlFor="metaCapiTestEventCode">
+                Test event code (optional)
+              </label>
+              <input
+                id="metaCapiTestEventCode"
+                value={form.metaCapiTestEventCode}
+                onChange={set("metaCapiTestEventCode")}
+                placeholder="TEST12345"
+                className={inputCls}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-100 pt-4">
+          <h3 className="text-sm font-semibold text-slate-800">
+            Product catalog feed
+          </h3>
+          <p className="mt-1 text-xs text-slate-400">
+            Live CSV feed of the real store catalogue for Meta Commerce
+            Manager (id, title, description, availability, condition, price,
+            link, image_link, variants). Add this URL as a scheduled feed:
+          </p>
+          <p className="mt-2 break-all rounded-lg bg-slate-100 px-3 py-2 font-mono text-xs text-slate-700">
+            /api/catalog
+          </p>
         </div>
       </Card>
 

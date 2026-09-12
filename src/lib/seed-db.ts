@@ -342,6 +342,10 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   pixelEventAddToCart: "true",
   pixelEventInitiateCheckout: "true",
   pixelEventPurchase: "true",
+  // --- Phase 4 (Meta Ads & Conversions). Additive only.
+  metaCapiEnabled: "false",
+  metaCapiAccessToken: "",
+  metaCapiTestEventCode: "",
 };
 
 export async function seedAdminData(
