@@ -20,7 +20,7 @@ type Confirmation = {
   total: number;
   shipping: number;
   subtotal: number;
-  email: string;
+  phone: string;
 };
 
 // Phase 8: public delivery configuration (server is the source of truth —
@@ -46,7 +46,6 @@ export function CheckoutClient() {
     codEnabled,
     freeShippingThreshold,
     minOrderAmount,
-    requireAddress,
     pixel,
     currency,
   } = useStoreConfig();
@@ -56,10 +55,8 @@ export function CheckoutClient() {
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
   const [form, setForm] = useState({
-    email: "",
     fullName: "",
     phone: "",
-    address: "",
     card: "",
     exp: "",
     cvc: "",
@@ -166,10 +163,8 @@ export function CheckoutClient() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: form.email,
           fullName: form.fullName,
           phone: form.phone,
-          address: form.address,
           commune: commune.trim(),
           // Phase 8: delivery selection — the server re-verifies the zone,
           // method and price (client values are never trusted).
@@ -206,7 +201,7 @@ export function CheckoutClient() {
         total: data.total,
         shipping: data.shipping,
         subtotal: data.subtotal,
-        email: form.email,
+        phone: form.phone,
       });
       clearCart();
       // Purchase event — only after a real order was created. Guarded per
@@ -254,8 +249,9 @@ export function CheckoutClient() {
             Order confirmed
           </h1>
           <p className="mt-3 text-black/60">
-            Thanks for your order. A confirmation has been sent to{" "}
-            <strong className="text-ink">{confirmation.email}</strong>.
+            Thanks for your order. We&apos;ll call you on{" "}
+            <strong className="text-ink">{confirmation.phone}</strong> to
+            confirm delivery.
           </p>
 
           <div className="mt-8 rounded-2xl border border-black/10 bg-brand-50 p-6 text-left">
@@ -350,14 +346,6 @@ export function CheckoutClient() {
                 Contact
               </h2>
               <input
-                type="email"
-                required
-                value={form.email}
-                onChange={set("email")}
-                placeholder="Email address"
-                className={`mt-3 ${inputClass}`}
-              />
-              <input
                 type="tel"
                 required
                 value={form.phone}
@@ -373,17 +361,10 @@ export function CheckoutClient() {
               </h2>
               <div className="mt-3 space-y-3">
                 <input
-                  required={requireAddress}
+                  required
                   value={form.fullName}
                   onChange={set("fullName")}
                   placeholder="Full name"
-                  className={inputClass}
-                />
-                <input
-                  required={requireAddress}
-                  value={form.address}
-                  onChange={set("address")}
-                  placeholder="Street address"
                   className={inputClass}
                 />
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -421,6 +402,7 @@ export function CheckoutClient() {
                     ))}
                   </select>
                   <input
+                    required
                     value={commune}
                     onChange={(e) => setCommune(e.target.value)}
                     placeholder="Commune"

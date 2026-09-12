@@ -1933,15 +1933,17 @@ async function main() {
     } catch {}
   }
   check(
-    "checkout UI no longer collects City / Postal code",
+    "checkout UI collects ONLY name + phone + wilaya + commune",
     coPage.status === 200 &&
-      !coBundle.includes('"Postal code"') &&
+      !coBundle.includes('"Email address"') &&
+      !coBundle.includes('"Street address"') &&
       !coBundle.includes('"City"') &&
-      coBundle.includes('"Street address"'),
-  );
-  check(
-    "checkout keeps wilaya + commune (Algeria-first address)",
-    coBundle.includes("Select wilaya") && coBundle.includes("Commune"),
+      !coBundle.includes('"Postal code"') &&
+      !coBundle.includes('"Country"') &&
+      coBundle.includes('"Full name"') &&
+      coBundle.includes('"Phone number (required)"') &&
+      coBundle.includes("Select wilaya") &&
+      coBundle.includes("Commune"),
   );
 
   // E. Server accepts orders without City/Postal code; phone is required.
@@ -1967,22 +1969,30 @@ async function main() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: "direct@test.local",
       fullName: "Direct Buyer",
-      address: "9 Buy Now Street",
+      commune: "Hammam Dalaa",
       items: [{ slug, size: dpVariant.size, color: dpVariant.color, quantity: 1 }],
     }),
   });
   check("checkout without phone rejected (400)", noPhone.status === 400);
+  const noName = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phone: "+213555000009",
+      commune: "Hammam Dalaa",
+      items: [{ slug, size: dpVariant.size, color: dpVariant.color, quantity: 1 }],
+    }),
+  });
+  check("checkout without full name rejected (400)", noName.status === 400);
 
+  // Order succeeds with ONLY full name + phone + wilaya + commune + items.
   const directBuy = await jfetch(`${BASE}/api/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      email: "direct@test.local",
       fullName: "Direct Buyer",
       phone: "+213555000009",
-      address: "9 Buy Now Street",
       commune: "Hammam Dalaa",
       deliveryZone: 28,
       deliveryMethod: "home",
@@ -2014,13 +2024,24 @@ async function main() {
   }).then((r) => r.json());
   const dpo = dpOrder.order;
   check(
-    "legacy address columns stay empty; country defaults to Algeria",
-    dpo.city === "" &&
-      dpo.postalCode === "" &&
-      dpo.country === "الجزائر" &&
+    "order created with ONLY name + phone + wilaya + commune; legacy columns empty",
+    dpo.fullName === "Direct Buyer" &&
+      dpo.phone === "+213555000009" &&
       dpo.commune === "Hammam Dalaa" &&
-      dpo.phone === "+213555000009",
-    JSON.stringify({ city: dpo.city, postal: dpo.postalCode, country: dpo.country }),
+      dpo.wilaya.includes("المسيلة") &&
+      dpo.email === "" &&
+      dpo.address === "" &&
+      dpo.city === "" &&
+      dpo.postalCode === "" &&
+      dpo.country === "الجزائر",
+    JSON.stringify({
+      email: dpo.email,
+      address: dpo.address,
+      city: dpo.city,
+      postal: dpo.postalCode,
+      country: dpo.country,
+      wilaya: dpo.wilaya,
+    }),
   );
 
   // F. Delivery remains server-priced for direct purchases.

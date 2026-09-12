@@ -36,7 +36,7 @@ type IncomingItem = {
  * Checkout honours Admin → Settings → Checkout:
  * - checkout disabled → 403
  * - minimum order amount enforced server-side
- * - phone / address required-ness driven by settings
+ * - full name + phone required; wilaya/commune drive delivery
  * - free-shipping threshold read from the database
  * The free-shipping threshold and rules are NEVER trusted from the client.
  *
@@ -62,7 +62,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const requireAddress = store ? store.requireAddress : true;
   const freeShipThreshold = store
     ? store.freeShippingThreshold
     : FALLBACK_FREE_SHIP_THRESHOLD;
@@ -79,17 +78,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // Direct-purchase flow: contact + street address + wilaya/commune.
-    // City / postal code are no longer collected from the storefront; the
-    // columns remain for historical orders and legacy clients.
+    // Direct-purchase flow: the order is identified by full name + phone;
+    // delivery goes through wilaya + commune (zone selector). Email, street
+    // address, city, postal code and country are no longer collected — the
+    // columns remain for historical orders and legacy API clients.
     const required: Array<[string, string]> = [
-      ["email", "Missing email"],
       ["fullName", "Missing fullName"],
       ["phone", "Missing phone"],
     ];
-    if (requireAddress) {
-      required.push(["address", "Missing address"]);
-    }
     for (const [key, message] of required) {
       if (!String(body[key] ?? "").trim()) {
         return Response.json({ ok: false, error: message }, { status: 400 });
@@ -330,7 +326,7 @@ export async function POST(request: Request) {
         .insert(orders)
         .values({
           orderNumber,
-          email: String(body.email).trim(),
+          email: String(body.email ?? "").trim(),
           fullName: String(body.fullName).trim(),
           phone: String(body.phone ?? "").trim(),
           address: String(body.address ?? "").trim(),
