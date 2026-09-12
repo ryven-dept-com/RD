@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useAdmin } from "@/context/admin-context";
+import { LanguageSwitcher } from "@/components/language-switcher";
 
 const NAV = [
   { label: "Dashboard", href: "/admin/dashboard", icon: "M3 12l9-9 9 9M5 10v10h14V10" },
@@ -112,7 +113,7 @@ export function AdminTopbar({ displayName }: { displayName: string }) {
         <div className="hidden lg:block">
           <p className="text-sm text-slate-500">Store management</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link
             href="/"
             target="_blank"
@@ -120,6 +121,9 @@ export function AdminTopbar({ displayName }: { displayName: string }) {
           >
             View store ↗
           </Link>
+          {/* Phase 9 language infrastructure — persists the rd-locale
+              cookie and flips html lang/dir for the admin panel too. */}
+          <LanguageSwitcher compact />
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
               {displayName.charAt(0).toUpperCase()}

@@ -2261,6 +2261,109 @@ async function main() {
   }).then((r) => r.json());
   check("historical orders unaffected by currency change", legacyAfterI18n.total === 1);
 
+  section("16) UX polish — mobile menu order & admin language switcher");
+
+  // A. Storefront mobile drawer: search → language → links, in order.
+  const menuHome = await fetchHtml("/");
+  const menuIdx = menuHome.text.indexOf("transition-[max-height]");
+  const menuHtml = menuIdx >= 0 ? menuHome.text.slice(menuIdx) : "";
+  const mSearch = menuHtml.indexOf('role="search"');
+  const mLang = menuHtml.indexOf("العربية");
+  const mFirstLink = menuHtml.indexOf('href="/shop?filter=new"');
+  check(
+    "mobile menu order: search first, language switcher second, links after",
+    menuIdx >= 0 && mSearch > 0 && mLang > mSearch && mFirstLink > mLang,
+    JSON.stringify({ mSearch, mLang, mFirstLink }),
+  );
+  check(
+    "mobile menu search reuses the existing search control (targets /shop)",
+    menuHtml.includes("Search products"),
+  );
+  check(
+    "switcher shows EN | FR | العربية in a stable LTR pill",
+    menuHtml.includes('dir="ltr" role="group"') &&
+      menuHtml.indexOf(">EN<") < menuHtml.indexOf(">FR<") &&
+      menuHtml.indexOf(">FR<") < menuHtml.indexOf("العربية"),
+  );
+  check(
+    "switcher rendered exactly twice (desktop + mobile, no duplication)",
+    (menuHome.text.match(/role="group"/g) ?? []).length === 2,
+  );
+
+  // B. Same order holds in RTL Arabic.
+  const menuAr = await fetchHtml("/", AR.cookie);
+  const menuArIdx = menuAr.text.indexOf("transition-[max-height]");
+  const menuArHtml = menuArIdx >= 0 ? menuAr.text.slice(menuArIdx) : "";
+  const arSearch = menuArHtml.indexOf('role="search"');
+  const arLang = menuArHtml.indexOf("العربية");
+  const arFirstLink = menuArHtml.indexOf('href="/shop?filter=new"');
+  check(
+    "RTL Arabic keeps the same mobile menu order (search, language, links)",
+    arSearch > 0 && arLang > arSearch && arFirstLink > arLang,
+    JSON.stringify({ arSearch, arLang, arFirstLink }),
+  );
+
+  // C. Admin header exposes the same language switcher (shared infrastructure).
+  const adminEn = await jfetch(`${BASE}/admin/dashboard`, {
+    headers: { cookie: auth.cookie },
+  });
+  const adminEnHtml = await adminEn.text();
+  check(
+    "admin topbar contains the language switcher",
+    adminEn.status === 200 && adminEnHtml.includes('aria-label="Change language"'),
+    JSON.stringify({ status: adminEn.status }),
+  );
+  check(
+    "admin switcher keeps logout/avatar intact",
+    adminEnHtml.includes("Logout") && adminEnHtml.includes("View store"),
+  );
+
+  // D. Admin honours the locale cookie: AR → RTL, FR → LTR.
+  const adminAr = await jfetch(`${BASE}/admin/dashboard`, {
+    headers: { cookie: `${auth.cookie}; rd-locale=ar` },
+  });
+  const adminArHtml = await adminAr.text();
+  check(
+    "admin SSR flips to lang=ar dir=rtl with the AR cookie",
+    adminAr.status === 200 &&
+      /<html[^>]*lang="ar"/.test(adminArHtml) &&
+      /<html[^>]*dir="rtl"/.test(adminArHtml),
+  );
+  const adminFr = await jfetch(`${BASE}/admin/dashboard`, {
+    headers: { cookie: `${auth.cookie}; rd-locale=fr` },
+  });
+  const adminFrHtml = await adminFr.text();
+  check(
+    "admin SSR stays lang=fr dir=ltr with the FR cookie",
+    adminFr.status === 200 &&
+      /<html[^>]*lang="fr"/.test(adminFrHtml) &&
+      /<html[^>]*dir="ltr"/.test(adminFrHtml),
+  );
+
+  // E. Checkout regression guard: still exactly the four customer fields.
+  const coPage16 = await jfetch(`${BASE}/checkout`);
+  const coHtml16 = await coPage16.text();
+  const coChunks16 = [
+    ...new Set(coHtml16.match(/\/_next\/static\/chunks\/[^"]+\.js/g) ?? []),
+  ];
+  let coBundle16 = "";
+  for (const src of coChunks16.slice(0, 12)) {
+    try { coBundle16 += await (await jfetch(`${BASE}${src}`)).text(); } catch {}
+  }
+  check(
+    "checkout still collects ONLY name/phone/wilaya/commune after UX polish",
+    coPage16.status === 200 &&
+      !coBundle16.includes('"Email address"') &&
+      !coBundle16.includes('"Street address"') &&
+      !coBundle16.includes('"City"') &&
+      !coBundle16.includes('"Postal code"') &&
+      !coBundle16.includes('"Country"') &&
+      coBundle16.includes('"Full name"') &&
+      coBundle16.includes('"Phone number (required)"') &&
+      coBundle16.includes("Select wilaya") &&
+      coBundle16.includes('"Commune"'),
+  );
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

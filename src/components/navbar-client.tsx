@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
 import { useT } from "@/i18n/language-context";
+import { SearchBar } from "@/app/(store)/shop/shop-controls";
 import { BagIcon, CloseIcon, MenuIcon } from "./icons";
 import { LanguageSwitcher } from "./language-switcher";
 
@@ -128,27 +129,33 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
         </div>
       </nav>
 
-      {/* Mobile menu */}
+      {/* Mobile menu — search and language first, then navigation links.
+          Scrollable when the content is taller than the viewport. */}
       <div
-        className={`overflow-hidden border-t border-black/10 bg-bone text-ink transition-[max-height] duration-300 lg:hidden ${
-          mobileOpen ? "max-h-[30rem]" : "max-h-0"
+        className={`border-t border-black/10 bg-bone text-ink transition-[max-height] duration-300 lg:hidden ${
+          mobileOpen
+            ? "max-h-[calc(100svh-4rem)] overflow-y-auto"
+            : "max-h-0 overflow-hidden"
         }`}
       >
-        <ul className="flex flex-col gap-1 px-4 py-4">
-          {links.map((l) => (
-            <li key={l.href}>
-              <Link
-                href={l.href}
-                className="block rounded-lg px-3 py-3 text-sm font-semibold uppercase tracking-wide hover:bg-black/5"
-              >
-                {label(l)}
-              </Link>
-            </li>
-          ))}
-          <li className="px-3 pt-2">
-            <LanguageSwitcher compact />
-          </li>
-        </ul>
+        <div className="flex flex-col gap-4 px-4 py-4">
+          <SearchBar targetPath="/shop" />
+          <div>
+            <LanguageSwitcher />
+          </div>
+          <ul className="flex flex-col gap-1">
+            {links.map((l) => (
+              <li key={l.href}>
+                <Link
+                  href={l.href}
+                  className="block rounded-lg px-3 py-3 text-sm font-semibold uppercase tracking-wide hover:bg-black/5"
+                >
+                  {label(l)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </header>
   );

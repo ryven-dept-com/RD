@@ -71,7 +71,18 @@ export function SortSelect({ resultCount }: { resultCount: number }) {
 }
 
 /** Free-text search box (URL-driven, works on every viewport). */
-export function SearchBar({ className = "" }: { className?: string }) {
+export function SearchBar({
+  className = "",
+  targetPath,
+}: {
+  className?: string;
+  /**
+   * Optional search destination. The mobile menu renders the search box on
+   * every page, so submissions there must land on /shop — on the shop page
+   * itself the prop is omitted and behavior is unchanged (current URL params).
+   */
+  targetPath?: string;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -80,8 +91,14 @@ export function SearchBar({ className = "" }: { className?: string }) {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const next = new URLSearchParams(params.toString());
     const q = value.trim();
+    if (targetPath) {
+      router.push(
+        q ? `${targetPath}?q=${encodeURIComponent(q)}` : targetPath,
+      );
+      return;
+    }
+    const next = new URLSearchParams(params.toString());
     if (q) next.set("q", q);
     else next.delete("q");
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
