@@ -33,6 +33,7 @@ type CartState = {
 
 type CartAction =
   | { type: "ADD"; item: CartItem }
+  | { type: "REPLACE"; item: CartItem }
   | { type: "REMOVE"; key: string }
   | { type: "SET_QTY"; key: string; quantity: number }
   | { type: "CLEAR" }
@@ -69,6 +70,9 @@ function reducer(state: CartState, action: CartAction): CartState {
       }
       return { ...state, items: [...state.items, action.item] };
     }
+    case "REPLACE":
+      // Direct-purchase (BUY NOW): checkout exactly the selected line.
+      return { ...state, items: [action.item] };
     case "REMOVE":
       return { ...state, items: state.items.filter((i) => lineKey(i) !== action.key) };
     case "SET_QTY":
@@ -95,6 +99,8 @@ type CartContextValue = {
   openCart: () => void;
   closeCart: () => void;
   addItem: (item: CartItem) => void;
+  /** Direct-purchase: replace the cart with a single line (no drawer). */
+  buyNow: (item: CartItem) => void;
   removeItem: (key: string) => void;
   setQuantity: (key: string, quantity: number) => void;
   clearCart: () => void;
@@ -153,6 +159,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "ADD", item });
         setIsOpen(true);
       },
+      buyNow: (item) => dispatch({ type: "REPLACE", item }),
       removeItem: (key) => dispatch({ type: "REMOVE", key }),
       setQuantity: (key, quantity) =>
         dispatch({ type: "SET_QTY", key, quantity }),

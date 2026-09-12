@@ -46,7 +46,6 @@ export function CheckoutClient() {
     codEnabled,
     freeShippingThreshold,
     minOrderAmount,
-    requirePhone,
     requireAddress,
     pixel,
     currency,
@@ -61,9 +60,6 @@ export function CheckoutClient() {
     fullName: "",
     phone: "",
     address: "",
-    city: "",
-    postalCode: "",
-    country: "Algeria",
     card: "",
     exp: "",
     cvc: "",
@@ -174,16 +170,13 @@ export function CheckoutClient() {
           fullName: form.fullName,
           phone: form.phone,
           address: form.address,
-          city: form.city,
-          postalCode: form.postalCode,
-          country: form.country,
+          commune: commune.trim(),
           // Phase 8: delivery selection — the server re-verifies the zone,
           // method and price (client values are never trusted).
           ...(deliveryZone
             ? {
                 deliveryZone: Number(deliveryZone),
                 deliveryMethod,
-                commune: commune.trim() || undefined,
                 wilaya: selectedZone?.wilaya ?? "",
               }
             : {}),
@@ -366,12 +359,10 @@ export function CheckoutClient() {
               />
               <input
                 type="tel"
-                required={requirePhone}
+                required
                 value={form.phone}
                 onChange={set("phone")}
-                placeholder={
-                  requirePhone ? "Phone number (required)" : "Phone number (optional)"
-                }
+                placeholder="Phone number (required)"
                 className={`mt-3 ${inputClass}`}
               />
             </section>
@@ -395,24 +386,9 @@ export function CheckoutClient() {
                   placeholder="Street address"
                   className={inputClass}
                 />
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    required={requireAddress}
-                    value={form.city}
-                    onChange={set("city")}
-                    placeholder="City"
-                    className={inputClass}
-                  />
-                  <input
-                    required={requireAddress}
-                    value={form.postalCode}
-                    onChange={set("postalCode")}
-                    placeholder="Postal code"
-                    className={inputClass}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   <select
+                    required
                     value={deliveryZone}
                     onChange={(e) => {
                       const code = e.target.value;
@@ -447,20 +423,13 @@ export function CheckoutClient() {
                   <input
                     value={commune}
                     onChange={(e) => setCommune(e.target.value)}
-                    placeholder="Commune (optional)"
+                    placeholder="Commune"
                     className={inputClass}
                   />
                 </div>
                 {zonesError && (
                   <p className="text-xs font-medium text-red-600">{zonesError}</p>
                 )}
-                <input
-                  required={requireAddress}
-                  value={form.country}
-                  onChange={set("country")}
-                  placeholder="Country"
-                  className={inputClass}
-                />
               </div>
             </section>
 

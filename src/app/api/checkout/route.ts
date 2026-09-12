@@ -63,7 +63,6 @@ export async function POST(request: Request) {
   }
 
   const requireAddress = store ? store.requireAddress : true;
-  const requirePhone = store ? store.requirePhone : false;
   const freeShipThreshold = store
     ? store.freeShippingThreshold
     : FALLBACK_FREE_SHIP_THRESHOLD;
@@ -80,20 +79,16 @@ export async function POST(request: Request) {
       );
     }
 
+    // Direct-purchase flow: contact + street address + wilaya/commune.
+    // City / postal code are no longer collected from the storefront; the
+    // columns remain for historical orders and legacy clients.
     const required: Array<[string, string]> = [
       ["email", "Missing email"],
       ["fullName", "Missing fullName"],
+      ["phone", "Missing phone"],
     ];
     if (requireAddress) {
-      required.push(
-        ["address", "Missing address"],
-        ["city", "Missing city"],
-        ["postalCode", "Missing postalCode"],
-        ["country", "Missing country"],
-      );
-    }
-    if (requirePhone) {
-      required.push(["phone", "Missing phone"]);
+      required.push(["address", "Missing address"]);
     }
     for (const [key, message] of required) {
       if (!String(body[key] ?? "").trim()) {
@@ -339,9 +334,11 @@ export async function POST(request: Request) {
           fullName: String(body.fullName).trim(),
           phone: String(body.phone ?? "").trim(),
           address: String(body.address ?? "").trim(),
+          // Legacy fields stay writable but are no longer requested by the
+          // storefront; country defaults to Algeria (Algeria-first store).
           city: String(body.city ?? "").trim(),
           postalCode: String(body.postalCode ?? "").trim(),
-          country: String(body.country ?? "").trim(),
+          country: String(body.country ?? "").trim() || "الجزائر",
           // Phase 8: wilaya/commune captured for Algeria-first delivery.
           wilaya: deliveryZoneName || String(body.wilaya ?? "").trim(),
           commune: String(body.commune ?? "").trim(),

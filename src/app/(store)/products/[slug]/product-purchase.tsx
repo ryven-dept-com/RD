@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
 import { trackBuiltPixelEvent } from "@/components/meta-pixel";
@@ -8,7 +9,7 @@ import {
   buildAddToCartEvent,
   buildViewContentEvent,
 } from "@/lib/pixel-events";
-import { BagIcon, CheckIcon, MinusIcon, PlusIcon } from "@/components/icons";
+import { ArrowRightIcon, MinusIcon, PlusIcon } from "@/components/icons";
 import type { StorefrontVariant } from "@/lib/queries";
 
 type PurchaseProps = {
@@ -39,7 +40,8 @@ function optionLists(variants: StorefrontVariant[]): {
 }
 
 export function ProductPurchase(props: PurchaseProps) {
-  const { addItem } = useCart();
+  const router = useRouter();
+  const { buyNow } = useCart();
   const { formatPrice, pixel, currency } = useStoreConfig();
 
   const variants = useMemo(() => props.variants ?? [], [props.variants]);
@@ -64,7 +66,6 @@ export function ProductPurchase(props: PurchaseProps) {
   );
   const [qty, setQty] = useState(1);
   const [error, setError] = useState(false);
-  const [added, setAdded] = useState(false);
 
   const selectedVariant = hasVariants
     ? variants.find((v) => v.size === size && v.color === color) ?? null
@@ -127,15 +128,18 @@ export function ProductPurchase(props: PurchaseProps) {
   }, []);
 
   const needSize = options.sizes.length > 0 && !size;
-  const canAdd = !needSize && effectiveStock > 0;
+  const canBuy = !needSize && effectiveStock > 0;
 
-  const handleAdd = () => {
+  // Direct purchase: the exact selected variant goes straight to checkout.
+  // Server-side stock + variant validation still runs at /api/checkout.
+  const handleBuyNow = () => {
     if (needSize) {
       setError(true);
       return;
     }
     if (effectiveStock <= 0) return;
-    addItem({
+    const quantity = Math.min(qty, effectiveStock);
+    buyNow({
       productId: props.productId,
       slug: props.slug,
       name: props.name,
@@ -143,22 +147,23 @@ export function ProductPurchase(props: PurchaseProps) {
       image: props.image,
       size,
       color,
-      quantity: Math.min(qty, effectiveStock),
+      quantity,
       maxStock: effectiveStock,
       variantId: selectedVariant?.id,
       sku: selectedVariant?.sku || undefined,
     });
+    // AddToCart stays part of the funnel: the line is placed in the cart
+    // before InitiateCheckout/Purchase fire downstream.
     if (pixel.enabled && pixel.events.addToCart) {
       trackBuiltPixelEvent(
         buildAddToCartEvent(
           { slug: props.slug, name: props.name, price: props.price },
-          qty,
+          quantity,
           currency,
         ),
       );
     }
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1800);
+    router.push("/checkout");
   };
 
   return (
@@ -259,24 +264,20 @@ export function ProductPurchase(props: PurchaseProps) {
         </div>
 
         <button
-          onClick={handleAdd}
-          disabled={!canAdd}
+          onClick={handleBuyNow}
+          disabled={!canBuy}
           className={`group flex flex-1 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold uppercase tracking-widest transition-transform ${
-            canAdd
+            canBuy
               ? "bg-ink text-bone hover:scale-[1.02]"
               : "cursor-not-allowed bg-black/10 text-black/40"
           }`}
         >
-          {!canAdd && effectiveStock <= 0 && !needSize ? (
+          {!canBuy && effectiveStock <= 0 && !needSize ? (
             <>Sold Out</>
-          ) : added ? (
-            <>
-              <CheckIcon className="h-5 w-5" /> Added to bag
-            </>
           ) : (
             <>
-              <BagIcon className="h-5 w-5" /> Add to bag ·{" "}
-              {formatPrice(props.price * qty)}
+              Buy now · {formatPrice(props.price * qty)}
+              <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </>
           )}
         </button>

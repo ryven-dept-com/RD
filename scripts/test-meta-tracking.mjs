@@ -1895,6 +1895,172 @@ async function main() {
     finalZones.zones.length >= 58,
   );
 
+  section("14) Direct purchase UX — BUY NOW flow, simplified address");
+
+  // A. Product page shows BUY NOW; the add-to-bag CTA is gone.
+  const pdp = await html(`/products/${slug}`);
+  check(
+    "product page shows BUY NOW instead of add-to-bag",
+    pdp.status === 200 &&
+      pdp.text.includes("Buy now") &&
+      !pdp.text.includes("Add to bag"),
+    JSON.stringify({ status: pdp.status }),
+  );
+  const pdpChunkSrcs = [
+    ...new Set(pdp.text.match(/\/_next\/static\/chunks\/[^"]+\.js/g) ?? []),
+  ];
+  let pdpBundle = "";
+  for (const src of pdpChunkSrcs.slice(0, 12)) {
+    try {
+      pdpBundle += await (await jfetch(`${BASE}${src}`)).text();
+    } catch {}
+  }
+  check(
+    "BUY NOW navigates straight to /checkout (no cart step)",
+    pdpBundle.includes("/checkout"),
+  );
+
+  // C/D. Checkout no longer collects City / Postal code anywhere.
+  const coPage = await jfetch(`${BASE}/checkout`);
+  const coHtml = await coPage.text();
+  const coChunkSrcs = [
+    ...new Set(coHtml.match(/\/_next\/static\/chunks\/[^"]+\.js/g) ?? []),
+  ];
+  let coBundle = "";
+  for (const src of coChunkSrcs.slice(0, 12)) {
+    try {
+      coBundle += await (await jfetch(`${BASE}${src}`)).text();
+    } catch {}
+  }
+  check(
+    "checkout UI no longer collects City / Postal code",
+    coPage.status === 200 &&
+      !coBundle.includes('"Postal code"') &&
+      !coBundle.includes('"City"') &&
+      coBundle.includes('"Street address"'),
+  );
+  check(
+    "checkout keeps wilaya + commune (Algeria-first address)",
+    coBundle.includes("Select wilaya") && coBundle.includes("Commune"),
+  );
+
+  // E. Server accepts orders without City/Postal code; phone is required.
+  let dpDetail = null;
+  for (let id = 1; id <= 20; id += 1) {
+    const d = await jfetch(`${BASE}/api/admin/products/${id}`, {
+      headers: adminHeaders,
+    }).then((r) => r.json().catch(() => ({})));
+    if (d?.product?.slug === slug) {
+      dpDetail = d;
+      break;
+    }
+  }
+  const dpVariant = (dpDetail?.variants || []).find(
+    (v) => v.active && v.stock >= 2,
+  );
+  check(
+    "resolved a purchasable variant for the direct-buy test",
+    Boolean(dpVariant),
+  );
+
+  const noPhone = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "direct@test.local",
+      fullName: "Direct Buyer",
+      address: "9 Buy Now Street",
+      items: [{ slug, size: dpVariant.size, color: dpVariant.color, quantity: 1 }],
+    }),
+  });
+  check("checkout without phone rejected (400)", noPhone.status === 400);
+
+  const directBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email: "direct@test.local",
+      fullName: "Direct Buyer",
+      phone: "+213555000009",
+      address: "9 Buy Now Street",
+      commune: "Hammam Dalaa",
+      deliveryZone: 28,
+      deliveryMethod: "home",
+      items: [
+        {
+          slug,
+          size: dpVariant.size,
+          color: dpVariant.color,
+          quantity: 2,
+          variantId: dpVariant.id,
+          sku: dpVariant.sku,
+        },
+      ],
+    }),
+  }).then((r) => r.json());
+  check(
+    "direct purchase creates an order without City / Postal code",
+    directBuy.ok === true && typeof directBuy.orderNumber === "string",
+    JSON.stringify(directBuy),
+  );
+
+  const dpList = await jfetch(
+    `${BASE}/api/admin/orders?q=${encodeURIComponent(directBuy.orderNumber)}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const dpOrderId = dpList.orders?.[0]?.id;
+  const dpOrder = await jfetch(`${BASE}/api/admin/orders/${dpOrderId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const dpo = dpOrder.order;
+  check(
+    "legacy address columns stay empty; country defaults to Algeria",
+    dpo.city === "" &&
+      dpo.postalCode === "" &&
+      dpo.country === "الجزائر" &&
+      dpo.commune === "Hammam Dalaa" &&
+      dpo.phone === "+213555000009",
+    JSON.stringify({ city: dpo.city, postal: dpo.postalCode, country: dpo.country }),
+  );
+
+  // F. Delivery remains server-priced for direct purchases.
+  const dpQuote = await jfetch(
+    `${BASE}/api/delivery/quote?zone=28&method=home&subtotal=${dpo.subtotal}`,
+  ).then((r) => r.json());
+  check(
+    "delivery quote matches the charged shipping (server-authoritative)",
+    directBuy.shipping === dpQuote.quote.shipping &&
+      dpo.deliveryZoneCode === 28 &&
+      dpo.deliveryMethod === "home",
+    JSON.stringify({ shipping: directBuy.shipping, quote: dpQuote.quote }),
+  );
+
+  // G. Inventory decremented exactly by the direct purchase.
+  const dpAfter = await jfetch(
+    `${BASE}/api/admin/products/${dpDetail.product.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const dpAfterVariant = dpAfter.variants.find((v) => v.id === dpVariant.id);
+  check(
+    "inventory decremented by the BUY NOW order",
+    dpAfterVariant.stock === dpVariant.stock - 2,
+    JSON.stringify({ before: dpVariant.stock, after: dpAfterVariant?.stock }),
+  );
+
+  // H. Purchase dedupe key returned exactly as before.
+  check(
+    "Meta purchase dedupe key present for direct purchase",
+    typeof directBuy.purchaseEventId === "string" &&
+      directBuy.purchaseEventId.length > 0,
+  );
+
+  // I. Historical orders (with city/postal data) remain readable.
+  const legacyStill = await jfetch(
+    `${BASE}/api/admin/orders?q=RVN-LEGACY7`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check("historical orders still load after the UX change", legacyStill.total === 1);
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");
