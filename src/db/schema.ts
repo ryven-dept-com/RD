@@ -174,6 +174,34 @@ export const adminSessions = pgTable("admin_sessions", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+// ---------------- MOBILE ADMIN APP: devices + notifications ----------------
+// Push-provider device handles registered by an AUTHENTICATED admin (private
+// admin app). Tokens are provider handles, never credentials; they are only
+// ever used server-side to deliver admin notifications.
+export const adminDevices = pgTable("admin_devices", {
+  id: serial("id").primaryKey(),
+  provider: text("provider").notNull().default("fcm"),
+  token: text("token").notNull().unique(),
+  deviceName: text("device_name").notNull().default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
+});
+
+// Admin notification log (new-order alerts and history for the private admin
+// app). One row per (order, type) — duplicates are impossible by constraint.
+// Rows are visible to authenticated admins only; never on public endpoints.
+export const adminNotifications = pgTable("admin_notifications", {
+  id: serial("id").primaryKey(),
+  orderId: integer("order_id").references(() => orders.id, {
+    onDelete: "cascade",
+  }),
+  orderNumber: text("order_number").notNull().default(""),
+  type: text("type").notNull().default("new_order"),
+  title: text("title").notNull().default(""),
+  body: text("body").notNull().default(""),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),

@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RYVEN DEPT Admin</string>
+    <string name="brand_name" translatable="false">RYVEN DEPT</string>
+    <string name="login_subtitle">Private admin console</string>
+    <string name="login_title">Administrator sign in</string>
+    <string name="login_username_hint">Username</string>
+    <string name="login_password_hint">Password</string>
+    <string name="login_button">Sign in</string>
+    <string name="login_fill_all">Enter both username and password.</string>
+    <string name="login_private_notice">Authorized administrator only. All access is logged and enforced server-side.</string>
+
+    <string name="channel_orders_name">New orders</string>
+    <string name="channel_orders_desc">Alerts when a customer places a new order</string>
+
+    <string name="tab_dashboard">Dashboard</string>
+    <string name="tab_orders">Orders</string>
+    <string name="tab_products">Products</string>
+    <string name="tab_notifications">Alerts</string>
+    <string name="action_logout">Sign out</string>
+
+    <string name="dashboard_today">TODAY</string>
+    <string name="dashboard_orders_today">Orders today</string>
+    <string name="dashboard_revenue_today">Revenue today</string>
+    <string name="dashboard_new_orders">New orders</string>
+    <string name="dashboard_pending">Pending</string>
+    <string name="dashboard_products_sold">Products sold today</string>
+    <string name="placeholder_dash" translatable="false">—</string>
+
+    <string name="orders_search_hint">Search number, name, phone…</string>
+    <string name="orders_filter_all">All statuses</string>
+    <string name="orders_empty">No orders found.</string>
+
+    <string name="products_search_hint">Search products…</string>
+    <string name="products_empty">No products found.</string>
+    <string name="products_stock_value">Stock: %1$d</string>
+    <string name="products_variants_value">%1$d variants</string>
+    <string name="product_status_active">Active</string>
+    <string name="product_status_draft">Draft</string>
+    <string name="product_status_archived">Archived</string>
+
+    <string name="notifications_empty">No notifications yet.</string>
+
+    <string name="status_new">New</string>
+    <string name="status_confirmed">Confirmed</string>
+    <string name="status_preparing">Preparing</string>
+    <string name="status_shipped">Shipped</string>
+    <string name="status_delivered">Delivered</string>
+    <string name="status_cancelled">Cancelled</string>
+    <string name="status_returned">Returned</string>
+
+    <string name="delivery_not_ready">Not ready</string>
+    <string name="delivery_ready">Ready</string>
+    <string name="delivery_handed">Handed to courier</string>
+    <string name="delivery_in_transit">In transit</string>
+    <string name="delivery_delivered">Delivered</string>
+    <string name="delivery_returned">Returned</string>
+
+    <string name="order_details_title">Order details</string>
+    <string name="order_not_found">Order not found.</string>
+    <string name="order_section_customer">CUSTOMER</string>
+    <string name="order_section_products">PRODUCTS</string>
+    <string name="order_section_delivery">DELIVERY</string>
+    <string name="order_section_update">UPDATE STATUS</string>
+    <string name="order_section_notes">NOTES</string>
+    <string name="order_section_history">HISTORY</string>
+    <string name="order_wilaya_label">Wilaya</string>
+    <string name="order_commune_label">Commune</string>
+    <string name="order_items_count">%1$d unit(s)</string>
+    <string name="order_subtotal">Subtotal</string>
+    <string name="order_delivery_price">Delivery price</string>
+    <string name="order_total">Total</string>
+    <string name="order_delivery_method">Delivery method</string>
+    <string name="order_delivery_status">Delivery status</string>
+    <string name="delivery_method_home">Home delivery</string>
+    <string name="delivery_method_office">Stopdesk office</string>
+    <string name="order_update_apply">Apply</string>
+    <string name="order_status_updated">Status updated</string>
+    <string name="order_status_unchanged">No change selected</string>
+    <string name="order_notes_empty">No notes.</string>
+    <string name="order_events_empty">No history yet.</string>
+    <string name="event_kind_status">Status</string>
+    <string name="event_kind_payment">Payment</string>
+    <string name="event_kind_delivery">Delivery</string>
+    <string name="event_kind_stock">Stock</string>
+    <string name="event_kind_note">Note</string>
+
+    <!-- Firebase Cloud Messaging configuration. Fill these in from your
+         Firebase project (Console → Project settings). They are PUBLIC
+         identifiers, not secrets. Leave as-is to run without push. -->
+    <string name="fcm_sender_id" translatable="false">REPLACE_WITH_FCM_SENDER_ID</string>
+    <string name="fcm_application_id" translatable="false">REPLACE_WITH_FIREBASE_APP_ID</string>
+    <string name="fcm_project_id" translatable="false">REPLACE_WITH_FIREBASE_PROJECT_ID</string>
+</resources>

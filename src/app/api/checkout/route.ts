@@ -14,6 +14,7 @@ import {
   resolveVariantForCheckout,
   syncProductStockFlags,
 } from "@/lib/product-admin";
+import { notifyAdminNewOrder } from "@/lib/admin-notifications";
 import {
   getZoneByCode,
   isShippingMethod,
@@ -370,6 +371,14 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
+
+    // Private mobile admin app: alert the registered admin device(s) about
+    // the new order. Awaited (bounded by a short internal timeout) so the
+    // push dispatch completes before the serverless response is frozen.
+    // notifyAdminNewOrder is fully defensive and never throws, so this can
+    // never break a customer's checkout. The alert carries only the order
+    // number + total (no customer PII).
+    await notifyAdminNewOrder(order);
 
     // Keep product-level totals/sold-out flags in sync after the decrement.
     const touchedProductIds = [...new Set(merged.map((l) => l.product.id))];

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ريفن دبت — الإدارة</string>
+    <string name="login_subtitle">لوحة تحكم خاصة بالمسؤول</string>
+    <string name="login_title">تسجيل دخول المسؤول</string>
+    <string name="login_username_hint">اسم المستخدم</string>
+    <string name="login_password_hint">كلمة المرور</string>
+    <string name="login_button">تسجيل الدخول</string>
+    <string name="login_fill_all">أدخل اسم المستخدم وكلمة المرور.</string>
+    <string name="login_private_notice">مخصص للمسؤول المصرح له فقط. كل الدخول مسجل ومفروض من الخادم.</string>
+
+    <string name="channel_orders_name">طلبات جديدة</string>
+    <string name="channel_orders_desc">تنبيهات عند تسجيل طلب جديد من عميل</string>
+
+    <string name="tab_dashboard">الرئيسية</string>
+    <string name="tab_orders">الطلبات</string>
+    <string name="tab_products">المنتجات</string>
+    <string name="tab_notifications">التنبيهات</string>
+    <string name="action_logout">تسجيل الخروج</string>
+
+    <string name="dashboard_today">اليوم</string>
+    <string name="dashboard_orders_today">طلبات اليوم</string>
+    <string name="dashboard_revenue_today">إيرادات اليوم</string>
+    <string name="dashboard_new_orders">طلبات جديدة</string>
+    <string name="dashboard_pending">قيد الانتظار</string>
+    <string name="dashboard_products_sold">منتجات مباعة اليوم</string>
+
+    <string name="orders_search_hint">بحث بالرقم، الاسم، الهاتف…</string>
+    <string name="orders_filter_all">كل الحالات</string>
+    <string name="orders_empty">لا توجد طلبات.</string>
+
+    <string name="products_search_hint">بحث في المنتجات…</string>
+    <string name="products_empty">لا توجد منتجات.</string>
+    <string name="products_stock_value">المخزون: %1$d</string>
+    <string name="products_variants_value">%1$d خيارات</string>
+    <string name="product_status_active">نشط</string>
+    <string name="product_status_draft">مسودة</string>
+    <string name="product_status_archived">مؤرشف</string>
+
+    <string name="notifications_empty">لا توجد تنبيهات بعد.</string>
+
+    <string name="status_new">جديد</string>
+    <string name="status_confirmed">تم التأكيد</string>
+    <string name="status_preparing">قيد التحضير</string>
+    <string name="status_shipped">تم الشحن</string>
+    <string name="status_delivered">تم التسليم</string>
+    <string name="status_cancelled">ملغى</string>
+    <string name="status_returned">مرجع</string>
+
+    <string name="delivery_not_ready">غير جاهز</string>
+    <string name="delivery_ready">جاهز</string>
+    <string name="delivery_handed">سُلّم للموصّل</string>
+    <string name="delivery_in_transit">قيد التوصيل</string>
+    <string name="delivery_delivered">تم التسليم</string>
+    <string name="delivery_returned">مرتجع</string>
+
+    <string name="order_details_title">تفاصيل الطلب</string>
+    <string name="order_not_found">الطلب غير موجود.</string>
+    <string name="order_section_customer">العميل</string>
+    <string name="order_section_products">المنتجات</string>
+    <string name="order_section_delivery">التوصيل</string>
+    <string name="order_section_update">تحديث الحالة</string>
+    <string name="order_section_notes">ملاحظات</string>
+    <string name="order_section_history">السجل</string>
+    <string name="order_wilaya_label">الولاية</string>
+    <string name="order_commune_label">البلدية</string>
+    <string name="order_items_count">%1$d قطعة</string>
+    <string name="order_subtotal">المجموع الفرعي</string>
+    <string name="order_delivery_price">سعر التوصيل</string>
+    <string name="order_total">الإجمالي</string>
+    <string name="order_delivery_method">طريقة التوصيل</string>
+    <string name="order_delivery_status">حالة التوصيل</string>
+    <string name="delivery_method_home">توصيل للمنزل</string>
+    <string name="delivery_method_office">مكتب التوقف</string>
+    <string name="order_update_apply">تطبيق</string>
+    <string name="order_status_updated">تم تحديث الحالة</string>
+    <string name="order_status_unchanged">لم يتم اختيار تغيير</string>
+    <string name="order_notes_empty">لا توجد ملاحظات.</string>
+    <string name="order_events_empty">لا يوجد سجل بعد.</string>
+    <string name="event_kind_status">الحالة</string>
+    <string name="event_kind_payment">الدفع</string>
+    <string name="event_kind_delivery">التوصيل</string>
+    <string name="event_kind_stock">المخزون</string>
+    <string name="event_kind_note">ملاحظة</string>
+</resources>

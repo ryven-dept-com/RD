@@ -75,6 +75,32 @@ const SCHEMA_STATEMENTS = [
     "created_at" timestamp DEFAULT now() NOT NULL,
     CONSTRAINT "orders_order_number_unique" UNIQUE("order_number")
   )`,
+  // Mobile admin app: push-provider device handles registered by an
+  // authenticated admin (private app only). Additive + idempotent.
+  `CREATE TABLE IF NOT EXISTS "admin_devices" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "provider" text DEFAULT 'fcm' NOT NULL,
+    "token" text NOT NULL,
+    "device_name" text DEFAULT '' NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL,
+    "last_seen_at" timestamp DEFAULT now() NOT NULL,
+    CONSTRAINT "admin_devices_token_unique" UNIQUE("token")
+  )`,
+  // Mobile admin app: notification log / history (new-order alerts).
+  // One row per (order_id, type) — duplicate alerts are impossible.
+  `CREATE TABLE IF NOT EXISTS "admin_notifications" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "order_id" integer REFERENCES "orders"("id") ON DELETE cascade,
+    "order_number" text DEFAULT '' NOT NULL,
+    "type" text DEFAULT 'new_order' NOT NULL,
+    "title" text DEFAULT '' NOT NULL,
+    "body" text DEFAULT '' NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "admin_notifications_order_type_uniq"
+    ON "admin_notifications" ("order_id", "type")`,
+  `CREATE INDEX IF NOT EXISTS "admin_notifications_created_at_idx"
+    ON "admin_notifications" ("created_at" DESC)`,
   `CREATE TABLE IF NOT EXISTS "products" (
     "id" serial PRIMARY KEY NOT NULL,
     "slug" text NOT NULL,

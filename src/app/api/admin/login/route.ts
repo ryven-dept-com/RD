@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import {
   SESSION_COOKIE,
   createSession,
+  csrfTokenFor,
   sessionCookieOptions,
   verifyPassword,
 } from "@/lib/admin-auth";
@@ -43,7 +44,11 @@ export async function POST(request: Request) {
     // Session regeneration: fresh token issued on each successful login.
     store.set(SESSION_COOKIE, token, sessionCookieOptions());
 
-    return Response.json({ ok: true });
+    // Non-browser admin clients (the private mobile admin app) cannot read
+    // the SSR-injected CSRF token, so it is returned here after successful
+    // authentication. It is session-bound and carries no privilege beyond
+    // the session cookie that accompanies it.
+    return Response.json({ ok: true, csrfToken: csrfTokenFor(token) });
   } catch (err) {
     console.error("POST /api/admin/login failed:", err);
     return Response.json({ ok: false, error: "Server error" }, { status: 500 });

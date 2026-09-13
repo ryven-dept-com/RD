@@ -2663,6 +2663,184 @@ async function main() {
     !(ghostList2.products ?? []).some((p) => p.slug === ghostSlug),
   );
 
+  // ------------------------------------------------------------------
+  console.log("\n\x1b[1m19) Private mobile admin app APIs — auth, devices, notifications\x1b[0m");
+  // ------------------------------------------------------------------
+  // The private Android admin app reuses these exact endpoints: login
+  // (session cookie + CSRF), dashboard KPIs, orders, products, device
+  // registration and notification history. Server-side authorization is
+  // mandatory everywhere — no guest access.
+  const { createHmac } = await import("node:crypto");
+  const loginRes = await jfetch(`${BASE}/api/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "admin", password: "ruven2026" }),
+  });
+  const loginJson = await loginRes.json().catch(() => ({}));
+  const freshCookie = loginRes.headers.get("set-cookie") || "";
+  check(
+    "login returns a session-bound CSRF token for non-browser clients",
+    loginJson.ok === true &&
+      typeof loginJson.csrfToken === "string" &&
+      loginJson.csrfToken.length === 64,
+  );
+  const freshToken = (freshCookie.match(/ruven_admin_session=([^;]+)/) || [])[1];
+  const freshCsrf = freshToken
+    ? createHmac("sha256", ADMIN_SECRET).update(freshToken).digest("hex")
+    : "";
+  check(
+    "returned CSRF token is exactly the HMAC of the new session",
+    Boolean(freshToken) && loginJson.csrfToken === freshCsrf,
+  );
+
+  check(
+    "notifications require admin auth (401 guest)",
+    (await jfetch(`${BASE}/api/admin/notifications`)).status === 401,
+  );
+  check(
+    "device registration requires admin auth (401 guest)",
+    (
+      await jfetch(`${BASE}/api/admin/devices`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "fcm", token: "guest-device-token-000000" }),
+      })
+    ).status === 401,
+  );
+  check(
+    "dashboard requires admin auth (401 guest)",
+    (await jfetch(`${BASE}/api/admin/dashboard`)).status === 401,
+  );
+  const badCsrf = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: { ...adminHeaders, "x-csrf-token": "f".repeat(64) },
+    body: JSON.stringify({ provider: "fcm", token: "csrf-test-device-0000000" }),
+  });
+  check("device registration enforces CSRF (401 bad token)", badCsrf.status === 401);
+
+  const mobileDeviceToken = "mobile-admin-fcm-token-integration-1";
+  const deviceReg = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      provider: "fcm",
+      token: mobileDeviceToken,
+      deviceName: "Integration Test Phone",
+    }),
+  });
+  const deviceRegJson = await deviceReg.json().catch(() => ({}));
+  check(
+    "authenticated admin registers the authorized device",
+    deviceReg.status === 201 &&
+      deviceRegJson.ok === true &&
+      Number(deviceRegJson.device?.id) > 0 &&
+      deviceRegJson.device.tokenMasked !== mobileDeviceToken,
+  );
+  const deviceList = await jfetch(`${BASE}/api/admin/devices`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "device list shows the registered device with a masked token",
+    deviceList.ok === true &&
+      (deviceList.devices ?? []).some((d) => d.id === deviceRegJson.device?.id) &&
+      !JSON.stringify(deviceList).includes(mobileDeviceToken),
+  );
+
+  const dash = await jfetch(`${BASE}/api/admin/dashboard`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "dashboard KPIs come from real orders (today \u2265 1 order, DZD)",
+    dash.ok === true &&
+      Number(dash.today?.orders) >= 1 &&
+      Number(dash.today?.revenue) >= 0 &&
+      Number.isInteger(Number(dash.orders?.new)) &&
+      Number.isInteger(Number(dash.orders?.pending)) &&
+      dash.today.currency === "DZD",
+  );
+
+  const mobileProducts = await jfetch(`${BASE}/api/admin/products`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "products API serves the real catalogue with stock aggregates",
+    mobileProducts.ok === true &&
+      Array.isArray(mobileProducts.products) &&
+      mobileProducts.products.length > 0 &&
+      typeof mobileProducts.products[0].totalStock === "number" &&
+      typeof mobileProducts.products[0].variantCount === "number",
+  );
+
+  // End-to-end new-order notification: create a product, buy it for real
+  // through the public checkout, verify the admin notification.
+  const mSlug = "mobile-admin-notify-product";
+  await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Mobile Admin Notify Product",
+      slug: mSlug,
+      sku: "MA-NOTIFY",
+      description: "Integration fixture.",
+      price: "20.00",
+      category: "Hoodies",
+      sizes: "M",
+      colors: "Onyx",
+      variants: [{ size: "M", color: "Onyx", sku: "MA-NOTIFY-M", stock: 5, active: true }],
+    }),
+  });
+  const notifyCustomer = {
+    fullName: "Mobile Notify Tester",
+    phone: "+213555001919",
+    address: "9 Notification Street",
+  };
+  const notifyBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...notifyCustomer,
+      items: [{ slug: mSlug, size: "M", color: "Onyx", quantity: 1 }],
+    }),
+  });
+  const notifyBuyJson = await notifyBuy.json().catch(() => ({}));
+  check("purchase used for notification test succeeds", notifyBuy.status === 201);
+
+  const notifList = await jfetch(`${BASE}/api/admin/notifications?limit=200`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const matches = (notifList.notifications ?? []).filter(
+    (n) => n.orderNumber === notifyBuyJson.orderNumber,
+  );
+  check(
+    "exactly one new-order notification per order (dedup)",
+    notifList.ok === true && matches.length === 1,
+    `matches=${matches.length}`,
+  );
+  check(
+    "notification title/body carry order number + total only",
+    matches[0]?.title === "RYVEN DEPT \u2014 New Order" &&
+      String(matches[0]?.body ?? "").includes(notifyBuyJson.orderNumber),
+  );
+  check(
+    "notification never leaks customer PII",
+    !JSON.stringify(matches[0] ?? {}).includes(notifyCustomer.fullName) &&
+      !JSON.stringify(matches[0] ?? {}).includes(notifyCustomer.phone),
+  );
+
+  const deviceDel = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "DELETE",
+    headers: adminHeaders,
+    body: JSON.stringify({ id: deviceRegJson.device?.id }),
+  }).then((r) => r.json());
+  const deviceList2 = await jfetch(`${BASE}/api/admin/devices`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "device can be unregistered and is then gone",
+    deviceDel.ok === true &&
+      !(deviceList2.devices ?? []).some((d) => d.id === deviceRegJson.device?.id),
+  );
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

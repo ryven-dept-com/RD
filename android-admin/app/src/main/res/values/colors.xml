@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_dark">#0F172A</color>
+    <color name="brand_muted">#94A3B8</color>
+    <color name="brand_green">#16A34A</color>
+    <color name="brand_orange">#E8734A</color>
+    <color name="white">#FFFFFF</color>
+    <color name="background">#F1F5F9</color>
+    <color name="border">#E2E8F0</color>
+    <color name="text_primary">#0F172A</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="error">#DC2626</color>
+</resources>

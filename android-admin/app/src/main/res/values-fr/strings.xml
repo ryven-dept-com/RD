@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RYVEN DEPT Admin</string>
+    <string name="login_subtitle">Console d\'administration privée</string>
+    <string name="login_title">Connexion administrateur</string>
+    <string name="login_username_hint">Nom d\'utilisateur</string>
+    <string name="login_password_hint">Mot de passe</string>
+    <string name="login_button">Se connecter</string>
+    <string name="login_fill_all">Saisissez le nom d\'utilisateur et le mot de passe.</string>
+    <string name="login_private_notice">Réservé à l\'administrateur autorisé. Chaque accès est journalisé et contrôlé côté serveur.</string>
+
+    <string name="channel_orders_name">Nouvelles commandes</string>
+    <string name="channel_orders_desc">Alertes lors d\'une nouvelle commande client</string>
+
+    <string name="tab_dashboard">Tableau de bord</string>
+    <string name="tab_orders">Commandes</string>
+    <string name="tab_products">Produits</string>
+    <string name="tab_notifications">Alertes</string>
+    <string name="action_logout">Déconnexion</string>
+
+    <string name="dashboard_today">AUJOURD\'HUI</string>
+    <string name="dashboard_orders_today">Commandes aujourd\'hui</string>
+    <string name="dashboard_revenue_today">Revenus aujourd\'hui</string>
+    <string name="dashboard_new_orders">Nouvelles commandes</string>
+    <string name="dashboard_pending">En attente</string>
+    <string name="dashboard_products_sold">Produits vendus aujourd\'hui</string>
+
+    <string name="orders_search_hint">Rechercher numéro, nom, téléphone…</string>
+    <string name="orders_filter_all">Tous les statuts</string>
+    <string name="orders_empty">Aucune commande trouvée.</string>
+
+    <string name="products_search_hint">Rechercher des produits…</string>
+    <string name="products_empty">Aucun produit trouvé.</string>
+    <string name="products_stock_value">Stock : %1$d</string>
+    <string name="products_variants_value">%1$d variantes</string>
+    <string name="product_status_active">Actif</string>
+    <string name="product_status_draft">Brouillon</string>
+    <string name="product_status_archived">Archivé</string>
+
+    <string name="notifications_empty">Aucune notification pour le moment.</string>
+
+    <string name="status_new">Nouvelle</string>
+    <string name="status_confirmed">Confirmée</string>
+    <string name="status_preparing">En préparation</string>
+    <string name="status_shipped">Expédiée</string>
+    <string name="status_delivered">Livrée</string>
+    <string name="status_cancelled">Annulée</string>
+    <string name="status_returned">Retournée</string>
+
+    <string name="delivery_not_ready">Pas prête</string>
+    <string name="delivery_ready">Prête</string>
+    <string name="delivery_handed">Remise au livreur</string>
+    <string name="delivery_in_transit">En transit</string>
+    <string name="delivery_delivered">Livrée</string>
+    <string name="delivery_returned">Retournée</string>
+
+    <string name="order_details_title">Détails de la commande</string>
+    <string name="order_not_found">Commande introuvable.</string>
+    <string name="order_section_customer">CLIENT</string>
+    <string name="order_section_products">PRODUITS</string>
+    <string name="order_section_delivery">LIVRAISON</string>
+    <string name="order_section_update">CHANGER LE STATUT</string>
+    <string name="order_section_notes">NOTES</string>
+    <string name="order_section_history">HISTORIQUE</string>
+    <string name="order_wilaya_label">Wilaya</string>
+    <string name="order_commune_label">Commune</string>
+    <string name="order_items_count">%1$d unité(s)</string>
+    <string name="order_subtotal">Sous-total</string>
+    <string name="order_delivery_price">Prix de livraison</string>
+    <string name="order_total">Total</string>
+    <string name="order_delivery_method">Mode de livraison</string>
+    <string name="order_delivery_status">Statut de livraison</string>
+    <string name="delivery_method_home">Livraison à domicile</string>
+    <string name="delivery_method_office">Bureau stopdesk</string>
+    <string name="order_update_apply">Appliquer</string>
+    <string name="order_status_updated">Statut mis à jour</string>
+    <string name="order_status_unchanged">Aucun changement sélectionné</string>
+    <string name="order_notes_empty">Aucune note.</string>
+    <string name="order_events_empty">Pas encore d\'historique.</string>
+    <string name="event_kind_status">Statut</string>
+    <string name="event_kind_payment">Paiement</string>
+    <string name="event_kind_delivery">Livraison</string>
+    <string name="event_kind_stock">Stock</string>
+    <string name="event_kind_note">Note</string>
+</resources>

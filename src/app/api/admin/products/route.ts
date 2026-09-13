@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { productVariants, products } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { verifyRequest } from "@/lib/admin-auth";
+import { searchProductsAdmin } from "@/lib/admin-queries";
 import { parseProductInput } from "@/lib/admin-product-input";
 import {
   parseVariantInputs,
@@ -104,6 +105,44 @@ export async function POST(request: Request) {
     return Response.json({ ok: true, id: createdId }, { status: 201 });
   } catch (err) {
     console.error("POST /api/admin/products failed:", err);
+    return Response.json({ ok: false, error: "Server error" }, { status: 500 });
+  }
+}
+
+/**
+ * Product list for the private mobile admin app (and any authenticated
+ * client). Reuses the exact same server-side search used by the web admin
+ * panel — auth + CSRF enforced, stock and variant aggregates come from the
+ * real database. Read-only: no data is ever mutated here.
+ */
+export async function GET(request: Request) {
+  const admin = await verifyRequest(request);
+  if (!admin) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const status = searchParams.get("status") ?? undefined;
+    const products = await searchProductsAdmin({
+      q: searchParams.get("q") ?? undefined,
+      status:
+        status === "draft" || status === "active" || status === "archived"
+          ? status
+          : undefined,
+      category: searchParams.get("category") ?? undefined,
+      sort: (searchParams.get("sort") as
+        | "newest"
+        | "oldest"
+        | "name"
+        | "stock-asc"
+        | "stock-desc"
+        | "manual"
+        | undefined) ?? "newest",
+    });
+    return Response.json({ ok: true, products });
+  } catch (err) {
+    console.error("GET /api/admin/products failed:", err);
     return Response.json({ ok: false, error: "Server error" }, { status: 500 });
   }
 }
