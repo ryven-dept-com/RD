@@ -37,8 +37,19 @@ language). The storefront website is untouched by all of this.
 
 ## Building the APK (private distribution)
 
-Requirements on the build machine: [Android Studio](https://developer.android.com/studio)
-(Koala or newer) or JDK 17 + Android SDK command-line tools.
+The project ships a **Gradle wrapper (Gradle 8.7)** — no separate Gradle
+install is needed.
+
+Requirements on the build machine:
+
+- **JDK 17–22** to run Gradle 8.7. If your machine only has a newer JDK
+  (e.g. JDK 25 bundled with a recent Android Studio), point Gradle at a
+  compatible JDK once — Android Studio: *Settings → Build, Execution,
+  Deployment → Build Tools → Gradle → Gradle JDK → Download JDK… → 21*,
+  or pass `-Dorg.gradle.java.home=/path/to/jdk-21` on the command line.
+- **Android SDK Platform 34 + build-tools** — Android Studio installs these
+  automatically on first sync; for command-line builds set `ANDROID_HOME`
+  and run `sdkmanager --licenses` once.
 
 ### Option A — Android Studio (recommended)
 
@@ -50,14 +61,13 @@ Requirements on the build machine: [Android Studio](https://developer.android.co
 
 The **debug APK is the intended private artifact** — it is signed with the
 standard Android debug keystore and installs on any Android 8.0+ device.
+(`app-debug-androidTest.apk` is NOT the app — always use `app-debug.apk`.)
 
 ### Option B — Command line
 
 ```bash
 cd android-admin
-# once, to create the Gradle wrapper:
-gradle wrapper --gradle-version 8.7
-./gradlew assembleDebug
+./gradlew assembleDebug        # Windows: gradlew.bat assembleDebug
 # artifact: app/build/outputs/apk/debug/app-debug.apk
 ```
 
@@ -128,6 +138,7 @@ Notes:
 ```
 android-admin/
 ├── settings.gradle.kts / build.gradle.kts / gradle.properties
+├── gradlew / gradlew.bat / gradle/wrapper/   # Gradle 8.7 wrapper (bundled)
 └── app/
     ├── build.gradle.kts          # API base URL via -PryvenApiBaseUrl
     └── src/main/

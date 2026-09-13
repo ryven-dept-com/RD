@@ -1,6 +1,9 @@
 package com.ryvendept.admin
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.view.Menu
 import android.view.MenuItem
@@ -130,6 +133,20 @@ class MainActivity : AppCompatActivity() {
 
         showTab(0)
         refreshNotificationsBadge()
+        requestNotificationPermission()
+    }
+
+    /**
+     * Android 13+ requires a runtime permission before the app can post
+     * new-order notifications. Asked once, right after sign-in.
+     */
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
+                PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
     }
 
     override fun onResume() {
