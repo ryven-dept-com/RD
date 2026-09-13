@@ -113,6 +113,13 @@ const SCHEMA_STATEMENTS = [
     "key" text PRIMARY KEY NOT NULL,
     "value" text DEFAULT '' NOT NULL
   )`,
+  // Persistent application markers. Used for one-time initialization flags
+  // that must survive restarts, redeploys and serverless cold starts.
+  `CREATE TABLE IF NOT EXISTS "app_meta" (
+    "key" text PRIMARY KEY NOT NULL,
+    "value" text DEFAULT '' NOT NULL,
+    "updated_at" timestamp DEFAULT now() NOT NULL
+  )`,
 ];
 
 const FOREIGN_KEYS: { name: string; statement: string }[] = [
@@ -459,7 +466,40 @@ export async function ensureProductSchema(db: SeedDb): Promise<void> {
       if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
     }
   }
-  await backfillProductVariants(db);
+  // NOTE: deliberately NO product/variant reconciliation here. Schema
+  // initialization must never mutate catalogue data — deleted products must
+  // stay deleted. Variant backfill happens only inside the one-time
+  // catalogue initialization (see bootstrapIfNeeded).
+}
+
+// ---------------------------------------------------------------------------
+// One-time initialization marker (app_meta table).
+//
+// The demo catalogue must be seeded exactly once per database. After this
+// marker exists, normal startup NEVER recreates missing products — a product
+// an admin deleted stays deleted through refreshes, logouts, restarts,
+// redeploys and storefront traffic.
+// ---------------------------------------------------------------------------
+const CATALOG_SEEDED_KEY = "catalogSeeded.v1";
+
+async function getAppMeta(db: SeedDb, key: string): Promise<string> {
+  const res = await db.execute(
+    sql`SELECT "value" FROM "app_meta" WHERE "key" = ${key}`,
+  );
+  return String(res.rows[0]?.value ?? "");
+}
+
+async function setAppMeta(
+  db: SeedDb,
+  key: string,
+  value: string,
+): Promise<void> {
+  await db.execute(sql`
+    INSERT INTO "app_meta" ("key", "value", "updated_at")
+    VALUES (${key}, ${value}, now())
+    ON CONFLICT ("key")
+    DO UPDATE SET "value" = EXCLUDED."value", "updated_at" = now()
+  `);
 }
 
 export async function ensureCmsSchema(db: SeedDb): Promise<void> {
@@ -761,19 +801,36 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureOrderSchema(db);
   await ensureDeliverySchema(db);
 
-  // Top the catalogue up to the full seed set (handles empty databases and
-  // partial ones left by earlier concurrent/aborted seeding attempts).
-  const productCount = await db.$count(products);
-  if (productCount < seedProducts.length) {
-    console.log(
-      `[bootstrap] catalogue incomplete (${productCount}/${seedProducts.length}) — seeding...`,
+  // ---- One-time catalogue initialization -------------------------------
+  // The demo catalogue is seeded exactly once per database, ever — recorded
+  // by a persistent marker in app_meta that survives restarts and redeploys.
+  // After the marker exists, normal startup never recreates missing
+  // products: no "count < N" top-ups, no per-slug resurrection. Deleting a
+  // product is permanent.
+  const catalogSeeded = await getAppMeta(db, CATALOG_SEEDED_KEY);
+  if (!catalogSeeded) {
+    const productCount = await db.$count(products);
+    if (productCount === 0) {
+      console.log("[bootstrap] empty catalogue — running one-time seed...");
+      await seedCatalogue(db, { clear: false });
+    } else {
+      // Store already has real/admin-managed products (e.g. upgraded from a
+      // version without the marker): adopt it as-is, seed nothing.
+      console.log(
+        `[bootstrap] catalogue already managed (${productCount} products) — marking initialized`,
+      );
+    }
+    // One-time variant reconciliation for products that predate Phase 5.
+    await backfillProductVariants(db);
+    await setAppMeta(
+      db,
+      CATALOG_SEEDED_KEY,
+      JSON.stringify({
+        at: new Date().toISOString(),
+        products: await db.$count(products),
+      }),
     );
-    await seedCatalogue(db, { clear: false });
   }
-
-  // Idempotent: give any product still lacking variant rows a variant set
-  // (covers freshly seeded catalogues on empty databases).
-  await backfillProductVariants(db);
 
   const adminCount = await db.$count(adminUsers);
   const hasCategories = (await db.$count(categories)) > 0;

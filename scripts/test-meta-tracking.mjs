@@ -2617,6 +2617,52 @@ async function main() {
       !/"\d[\d ]*,\d{2} DA"/.test(finalCatalogText),
   );
 
+  // F. Permanent deletion: a deleted product must never be resurrected by
+  // any startup/bootstrap/seed path.
+  const ghostSlug = "phase10-ghost-product";
+  const ghostCreate = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase10 Ghost Product",
+      slug: ghostSlug,
+      sku: "P10-GHOST",
+      description: "Created to be deleted.",
+      price: "10.00",
+      category: "Hoodies",
+      sizes: "M",
+      colors: "Onyx",
+      variants: [
+        { size: "M", color: "Onyx", sku: "P10-GHOST-M", stock: 3, active: true },
+      ],
+    }),
+  }).then((r) => r.json());
+  check("create ghost product for deletion test", ghostCreate.ok === true);
+  const ghostDelete = await jfetch(
+    `${BASE}/api/admin/products/${ghostCreate.id}`,
+    { method: "DELETE", headers: adminHeaders },
+  );
+  check(
+    "admin DELETE permanently removes the product",
+    ghostDelete.status === 200,
+    `status ${ghostDelete.status}`,
+  );
+  const ghostList1 = await jfetch(`${BASE}/api/products`).then((r) => r.json());
+  check(
+    "deleted product absent from the storefront API",
+    !(ghostList1.products ?? []).some((p) => p.slug === ghostSlug),
+  );
+  const ghostPdp = await jfetch(`${BASE}/products/${ghostSlug}`);
+  check("deleted product page returns 404", ghostPdp.status === 404);
+  // Even the explicit manual seed endpoint must not resurrect deleted data.
+  const ghostSeed = await jfetch(`${BASE}/api/seed`).then((r) => r.json());
+  check("explicit /api/seed completes without error", ghostSeed.ok === true);
+  const ghostList2 = await jfetch(`${BASE}/api/products`).then((r) => r.json());
+  check(
+    "deleted product still absent after /api/seed (no resurrection)",
+    !(ghostList2.products ?? []).some((p) => p.slug === ghostSlug),
+  );
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");
