@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDashboardStats, getRecentOrders } from "@/lib/admin-queries";
 import { formatDZD, formatDateTime, STATUS_STYLES } from "@/lib/admin-format";
+import { PushNotificationsCard } from "@/components/push-notifications-card";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,9 @@ export default async function DashboardPage() {
           Overview of your store performance
         </p>
       </div>
+
+      {/* Web push subscription for this admin device (phone-first) */}
+      <PushNotificationsCard />
 
       {/* headline metrics */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">

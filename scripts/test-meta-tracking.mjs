@@ -20,6 +20,8 @@ function jfetch(url, opts = {}) {
 }
 import { setTimeout as sleep } from "node:timers/promises";
 import { createRequire } from "node:module";
+import http from "node:http";
+import { generateKeyPairSync } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -138,6 +140,83 @@ async function stopAll() {
     try { appProc?.kill("SIGKILL"); } catch {}
   }
   try { dbProc?.close(); } catch {}
+  try { pushStub?.server?.close(); } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// FCM stub transport. Real Google endpoints (oauth2/fcm) are intentionally
+// unreachable from CI; the app's FCM sender exposes FCM_API_BASE /
+// FCM_OAUTH_TOKEN_URL seams so the whole HTTP v1 pipeline (OAuth JWT →
+// messages:send → webpush payload → dead-token pruning) is exercised against
+// this local stub with a real RSA service-account key.
+// ---------------------------------------------------------------------------
+let pushStub = null;
+
+async function startPushStub() {
+  const messages = [];
+  const server = http.createServer((req, res) => {
+    let body = "";
+    req.on("data", (c) => (body += c));
+    req.on("end", () => {
+      if (req.url?.startsWith("/token")) {
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ access_token: "stub-oauth-token", expires_in: 3600 }));
+        return;
+      }
+      if (req.url?.includes("/messages:send")) {
+        const parsed = JSON.parse(body || "{}");
+        const token = parsed?.message?.token;
+        if (!String(req.headers.authorization || "").includes("stub-oauth-token")) {
+          res.statusCode = 401;
+          res.end(JSON.stringify({ error: "bad auth" }));
+          return;
+        }
+        messages.push(parsed);
+        if (String(token || "").startsWith("dead-fcm-token")) {
+          res.statusCode = 404;
+          res.setHeader("Content-Type", "application/json");
+          res.end(
+            JSON.stringify({
+              error: {
+                status: "NOT_FOUND",
+                message: "Requested entity was not found.",
+                details: [{ reason: "UNREGISTERED" }],
+              },
+            }),
+          );
+          return;
+        }
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ name: `projects/stub-proj/messages/${messages.length}` }));
+        return;
+      }
+      res.statusCode = 404;
+      res.end("{}");
+    });
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const port = server.address().port;
+  pushStub = { server, port, messages };
+  return pushStub;
+}
+
+/** Configure Firebase/FCM environment BEFORE the app is spawned. */
+async function configurePushEnv() {
+  const stub = await startPushStub();
+  const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  process.env.FCM_OAUTH_TOKEN_URL = `http://127.0.0.1:${stub.port}/token`;
+  process.env.FCM_API_BASE = `http://127.0.0.1:${stub.port}`;
+  process.env.FCM_SERVICE_ACCOUNT_JSON = JSON.stringify({
+    project_id: "stub-proj",
+    client_email: "stub@stub-proj.iam.gserviceaccount.com",
+    private_key: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+  });
+  // Public (by design) Firebase web config for the admin subscribe flow.
+  process.env.NEXT_PUBLIC_FIREBASE_API_KEY = "AIzaSyStubApiKeyPublicWebConfig";
+  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = "stub-proj";
+  process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID = "1234567890";
+  process.env.NEXT_PUBLIC_FIREBASE_APP_ID = "1:1234567890:web:stubappid";
+  process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY = "BStubVapidPublicKeyForWebPush";
 }
 
 async function login() {
@@ -173,6 +252,7 @@ async function html(p) {
 
 async function main() {
   await startDb();
+  await configurePushEnv();
   await startApp();
 
   // Seed catalogue + settings.
@@ -1479,6 +1559,43 @@ async function main() {
   check(
     "official pricing: wilayas 50 & 54 hidden (no delivery offered)",
     !oz(50) && !oz(54),
+  );
+
+  // 13.0c Exhaustive table verification — every wilaya against the
+  // business-provided delivery table (values in DA; stored/compared in
+  // cents). `null` = method not offered; both null = zone disabled.
+  const OFFICIAL = {
+    1: [1100, 600], 2: [700, 400], 3: [900, 500], 4: [650, 400], 5: [700, 500],
+    6: [700, 400], 7: [900, 500], 8: [1100, 600], 9: [500, 250], 10: [700, 400],
+    11: [1300, 600], 12: [700, 400], 13: [800, 500], 14: [800, 400], 15: [700, 400],
+    16: [500, 250], 17: [900, 500], 18: [600, 400], 19: [700, 400], 20: [800, 400],
+    21: [600, 400], 22: [700, 400], 23: [700, 400], 24: [600, 400], 25: [500, 350],
+    26: [700, 400], 27: [700, 400], 28: [800, 500], 29: [700, 400], 30: [900, 500],
+    31: [800, 400], 32: [800, 500], 33: [1300, 600], 34: [700, 400], 35: [700, 400],
+    36: [700, 400], 37: [1300, 600], 38: [800, 400], 39: [900, 500], 40: [700, 500],
+    41: [700, 500], 42: [700, 400], 43: [600, 400], 44: [700, 400], 45: [800, 500],
+    46: [800, 400], 47: [1000, 500], 48: [700, 400], 49: [1100, 600],
+    50: [null, null], 51: [900, 500], 52: [1100, null], 53: [1300, 600],
+    54: [null, null], 55: [900, 500], 56: [1100, null], 57: [900, null],
+    58: [1100, 500],
+  };
+  const adminAll = await jfetch(`${BASE}/api/admin/delivery`, { headers: adminHeaders }).then((r) => r.json());
+  const az = (code) => (adminAll.zones ?? []).find((z) => z.code === code);
+  const mismatches = [];
+  for (const [codeStr, [home, stop]] of Object.entries(OFFICIAL)) {
+    const code = Number(codeStr);
+    const z = az(code);
+    if (!z) { mismatches.push(`${code}:missing`); continue; }
+    if ((z.homeEnabled === true) !== (home !== null)) mismatches.push(`${code}:homeEnabled`);
+    if ((z.pickupEnabled === true) !== (stop !== null)) mismatches.push(`${code}:pickupEnabled`);
+    if (home !== null && z.homePrice !== home * 100) mismatches.push(`${code}:homePrice=${z.homePrice}`);
+    if (stop !== null && z.pickupPrice !== stop * 100) mismatches.push(`${code}:pickupPrice=${z.pickupPrice}`);
+    if (home === null && stop === null && z.enabled !== false) mismatches.push(`${code}:enabled`);
+  }
+  check(
+    "ALL 58 wilaya prices/availability exactly match the provided table",
+    Object.keys(OFFICIAL).length === 58 && mismatches.length === 0,
+    mismatches.join(",") || "58/58 exact",
   );
 
   // 13.1 Zone CRUD + validation + safe deletion.
@@ -2861,7 +2978,7 @@ async function main() {
   );
   check(
     "notification title/body carry order number + total only",
-    matches[0]?.title === "RYVEN DEPT \u2014 New Order" &&
+    matches[0]?.title === "RYVEN DEPT \u2014 Nouvelle commande" &&
       String(matches[0]?.body ?? "").includes(notifyBuyJson.orderNumber),
   );
   check(
@@ -2882,6 +2999,147 @@ async function main() {
     "device can be unregistered and is then gone",
     deviceDel.ok === true &&
       !(deviceList2.devices ?? []).some((d) => d.id === deviceRegJson.device?.id),
+  );
+
+  section("18) FCM Web Push — stub transport end-to-end");
+
+  // 18.0 Public config endpoint: enabled + public-only values.
+  const pushCfg = await jfetch(`${BASE}/api/push/config`).then((r) => r.json());
+  check(
+    "push config enabled with public Firebase web config + VAPID",
+    pushCfg.ok === true &&
+      pushCfg.enabled === true &&
+      pushCfg.firebase?.projectId === "stub-proj" &&
+      String(pushCfg.vapidKey || "").length > 0,
+    JSON.stringify(pushCfg),
+  );
+  check(
+    "push config exposes no server credentials",
+    !JSON.stringify(pushCfg).toLowerCase().includes("private") ||
+      !JSON.stringify(pushCfg).includes("BEGIN"),
+  );
+
+  // 18.1 Service worker is served, tiny, with push + click handling.
+  const swRes = await jfetch(`${BASE}/firebase-messaging-sw.js`);
+  const swText = await swRes.text();
+  check(
+    "firebase-messaging-sw.js served with push + notificationclick handlers",
+    swRes.status === 200 &&
+      String(swRes.headers.get("content-type") || "").includes("javascript") &&
+      swText.includes("self.addEventListener(\"push\"") &&
+      swText.includes("notificationclick") &&
+      swText.includes("showNotification") &&
+      swText.includes("/admin/orders"),
+  );
+
+  // 18.2 Register one live + one dead device (both authenticated admin).
+  const LIVE_TOKEN = "live-fcm-webpush-token-0000000001";
+  const DEAD_TOKEN = "dead-fcm-token-0000000002";
+  const liveDev = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ provider: "fcm", token: LIVE_TOKEN, deviceName: "Suite phone" }),
+  }).then((r) => r.json());
+  const deadDev = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ provider: "fcm", token: DEAD_TOKEN, deviceName: "Dead phone" }),
+  }).then((r) => r.json());
+  check(
+    "live + dead admin devices registered (multi-device support)",
+    liveDev.ok === true && deadDev.ok === true,
+  );
+
+  // 18.3 Real checkout order → server must push to the FCM stub.
+  const adminProdList = await jfetch(`${BASE}/api/admin/products`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  let pushSlug = null;
+  let pushVariant = null;
+  for (const p of adminProdList.products ?? []) {
+    const detail = await jfetch(`${BASE}/api/admin/products/${p.id}`, {
+      headers: adminHeaders,
+    }).then((r) => r.json());
+    const v = (detail.variants ?? []).find((x) => (x.stock ?? 0) > 0 && x.active !== false);
+    if (v) {
+      pushSlug = detail.product?.slug ?? p.slug;
+      pushVariant = v;
+      break;
+    }
+  }
+  const pushBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fullName: "Push Flow Tester",
+      phone: "0550000009",
+      commune: "Test Commune",
+      deliveryZone: 16,
+      deliveryMethod: "home",
+      items: [
+        {
+          slug: pushSlug,
+          size: pushVariant?.size,
+          color: pushVariant?.color,
+          quantity: 1,
+        },
+      ],
+    }),
+  }).then((r) => r.json());
+  check("push-flow order created", pushBuy.ok === true, JSON.stringify(pushBuy).slice(0, 200));
+
+  await sleep(750); // fan-out + prune happen inside the awaited checkout hook
+
+  const sentLive = pushStub.messages.filter((m) => m?.message?.token === LIVE_TOKEN);
+  const sentDead = pushStub.messages.filter((m) => m?.message?.token === DEAD_TOKEN);
+  check(
+    "exactly one FCM v1 send per live device for the order",
+    sentLive.length === 1,
+    `live=${sentLive.length}`,
+  );
+  check(
+    "dead device was attempted exactly once",
+    sentDead.length === 1,
+    `dead=${sentDead.length}`,
+  );
+
+  const sentMsg = sentLive[0]?.message;
+  check(
+    "web push title is RYVEN DEPT — Nouvelle commande",
+    sentMsg?.notification?.title === "RYVEN DEPT — Nouvelle commande" &&
+      sentMsg?.webpush?.notification?.title === "RYVEN DEPT — Nouvelle commande",
+    String(sentMsg?.webpush?.notification?.title ?? ""),
+  );
+  check(
+    "web push body = order number + total + status, zero PII",
+    String(sentMsg?.webpush?.notification?.body || "").includes(pushBuy.orderNumber) &&
+      String(sentMsg?.webpush?.notification?.body || "").includes("جديد") &&
+      !JSON.stringify(sentMsg).includes("Push Flow Tester") &&
+      !JSON.stringify(sentMsg).includes("0550000009"),
+    String(sentMsg?.webpush?.notification?.body ?? ""),
+  );
+  check(
+    "web push click target = secure admin order page",
+    /\/admin\/orders\/\d+/.test(String(sentMsg?.webpush?.fcm_options?.link || "")),
+    String(sentMsg?.webpush?.fcm_options?.link ?? ""),
+  );
+
+  // 18.4 Dead token (404 UNREGISTERED) must be pruned automatically.
+  let pruned = false;
+  let afterList = { devices: [] };
+  for (let i = 0; i < 20 && !pruned; i++) {
+    afterList = await jfetch(`${BASE}/api/admin/devices`, {
+      headers: adminHeaders,
+    }).then((r) => r.json());
+    pruned =
+      !(afterList.devices ?? []).some((d) => String(d.tokenMasked || "").startsWith("dead-fcm")) &&
+      (afterList.devices ?? []).some((d) => String(d.tokenMasked || "").startsWith("live-fcm"));
+    if (!pruned) await sleep(250);
+  }
+  check(
+    "unregistered device pruned, live device kept",
+    pruned,
+    JSON.stringify((afterList.devices ?? []).map((d) => d.tokenMasked)),
   );
 
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);

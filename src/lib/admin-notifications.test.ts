@@ -171,7 +171,7 @@ describe("new-order notifications", () => {
     const order = await insertOrder();
     const payload = buildNewOrderPayload(order);
 
-    expect(payload.title).toBe("RYVEN DEPT — New Order");
+    expect(payload.title).toBe("RYVEN DEPT — Nouvelle commande");
     expect(payload.body).toContain(order.orderNumber);
     expect(payload.body).toContain("2 509,95"); // formatted total
     expect(payload.body).toContain(order.status); // order status identified

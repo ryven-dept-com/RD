@@ -27,7 +27,7 @@ import { formatMoney } from "@/lib/money";
  * enforced by a unique index, plus an FCM collapse_key per order.
  */
 
-export const ADMIN_NEW_ORDER_TITLE = "RYVEN DEPT — New Order";
+export const ADMIN_NEW_ORDER_TITLE = "RYVEN DEPT — Nouvelle commande";
 export const NOTIFICATION_TYPE_NEW_ORDER = "new_order";
 
 // ---------------------------------------------------------------------------
@@ -259,6 +259,52 @@ export async function notifyAdminNewOrder(order: Order): Promise<NotifyResult> {
 
 const FCM_TIMEOUT_MS = 6_000;
 
+/**
+ * FCM HTTP v1 message for one admin device token. Pure + exported for unit
+ * testing. The generic `notification` + `data` fields cover Android/desktop
+ * clients; the `webpush` override makes browsers display the notification
+ * even when the admin tab is closed (background web push) and marks the
+ * message high-urgency so phones deliver it immediately.
+ */
+export function buildFcmV1Message(
+  payload: AdminNotificationPayload,
+  token: string,
+  orderId: number,
+) {
+  return {
+    message: {
+      token,
+      notification: { title: payload.title, body: payload.body },
+      data: { ...payload.data, orderId: String(orderId) },
+      webpush: {
+        headers: { Urgency: "high" },
+        notification: { title: payload.title, body: payload.body },
+        data: { ...payload.data, orderId: String(orderId) },
+        fcm_options: { link: `/admin/orders/${orderId}` },
+      },
+      android: { collapse_key: `order-${orderId}`, priority: "high" },
+    },
+  };
+}
+
+/**
+ * Detect FCM responses meaning the token is gone (app uninstalled, browser
+ * cleared, token expired). Such devices are pruned so future orders stop
+ * wasting sends on dead tokens.
+ */
+export function isUnregisteredTokenResponse(
+  status: number,
+  bodyText: string,
+): boolean {
+  if (status === 404) return true;
+  const lower = bodyText.toLowerCase();
+  return (
+    lower.includes("unregistered") ||
+    lower.includes("invalid-registration-token") ||
+    lower.includes("registration token is no longer valid")
+  );
+}
+
 async function deliverFcm(
   config: Exclude<PushConfig, { kind: "none" }>,
   payload: AdminNotificationPayload,
@@ -297,30 +343,42 @@ async function deliverFcm(
       return Number(json?.success ?? 0);
     }
 
-    // FCM HTTP v1: one message per token.
+    // FCM HTTP v1: one message per token. Endpoints are overridable via env
+    // (test seam for offline stub servers); defaults are the real Google
+    // endpoints. Secrets never leave the server.
+    const fcmBase = (process.env.FCM_API_BASE || "https://fcm.googleapis.com").replace(/\/$/, "");
     const accessToken = await getFcmAccessToken(config);
     let delivered = 0;
     for (const token of tokens) {
       const res = await fetch(
-        `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(config.projectId)}/messages:send`,
+        `${fcmBase}/v1/projects/${encodeURIComponent(config.projectId)}/messages:send`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({
-            message: {
-              token,
-              notification: { title: payload.title, body: payload.body },
-              data: payload.data,
-            },
-          }),
+          body: JSON.stringify(buildFcmV1Message(payload, token, orderId)),
           signal: controller.signal,
         },
       );
-      if (res.ok) delivered += 1;
-      else console.warn(`[admin-notify] FCM v1 responded ${res.status}`);
+      if (res.ok) {
+        delivered += 1;
+        continue;
+      }
+      const errText = await res.text().catch(() => "");
+      if (isUnregisteredTokenResponse(res.status, errText)) {
+        // Token is dead (browser cleared / uninstalled): prune the device so
+        // it never receives (or blocks) future sends.
+        try {
+          await db.delete(adminDevices).where(eq(adminDevices.token, token));
+          console.info(`[admin-notify] pruned unregistered device token (${maskToken(token)})`);
+        } catch (pruneErr) {
+          console.warn("[admin-notify] failed to prune device:", pruneErr);
+        }
+      } else {
+        console.warn(`[admin-notify] FCM v1 responded ${res.status}`);
+      }
     }
     return delivered;
   } catch (err) {
@@ -359,14 +417,17 @@ async function getFcmAccessToken(config: {
     .sign(config.privateKey, "base64url");
   const jwt = `${signingInput}.${signature}`;
 
-  const res = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion: jwt,
-    }),
-  });
+  const res = await fetch(
+    process.env.FCM_OAUTH_TOKEN_URL || "https://oauth2.googleapis.com/token",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    },
+  );
   if (!res.ok) throw new Error(`OAuth token request failed (${res.status})`);
   const json = (await res.json()) as { access_token: string; expires_in: number };
   cachedToken = {
