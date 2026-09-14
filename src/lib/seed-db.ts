@@ -687,6 +687,47 @@ const WILAYAS: [number, string, number | null, number | null][] = [
   [58, "المنيعة", 1100, 500],
 ];
 
+/**
+ * Security hardening: server-side ownership of admin push devices.
+ *
+ * Adds `admin_id` (the admin account that registered the device). Additive
+ * and idempotent; existing databases get a ONE-TIME backfill (marker-gated)
+ * that attributes pre-existing rows to the first admin account — safe
+ * because those rows could only ever have been created through the
+ * authenticated + CSRF-protected /api/admin/devices route. New registrations
+ * always stamp the live session's admin id server-side.
+ */
+const ADMIN_DEVICE_OWNERSHIP_STATEMENTS = [
+  `ALTER TABLE "admin_devices" ADD COLUMN IF NOT EXISTS "admin_id" integer REFERENCES "admin_users"("id")`,
+];
+
+export async function ensureAdminDeviceOwnership(db: SeedDb): Promise<void> {
+  for (const statement of ADMIN_DEVICE_OWNERSHIP_STATEMENTS) {
+    try {
+      await db.execute(sql.raw(statement));
+    } catch (err) {
+      if (!isAlreadyExistsErr(err, collectErrCodes(err), collectErrMessages(err))) throw err;
+    }
+  }
+
+  const BACKFILL_FLAG = "adminDevices.ownership.v1";
+  const inserted = await db.execute(
+    sql`INSERT INTO "settings" ("key", "value") VALUES (${BACKFILL_FLAG}, 'done')
+        ON CONFLICT ("key") DO NOTHING`,
+  );
+  if (inserted.rowCount === 0) return; // already backfilled
+
+  // Attribute legacy ownerless rows to the first admin account (they were
+  // necessarily registered by an authenticated admin via the protected API).
+  await db.execute(sql`
+    UPDATE "admin_devices" SET "admin_id" = (
+      SELECT MIN("id") FROM "admin_users"
+    )
+    WHERE "admin_id" IS NULL
+  `);
+  console.log("[bootstrap] admin push devices backfilled with ownership.");
+}
+
 /** app_meta marker: the one-time official pricing sync already ran. */
 export const DELIVERY_PRICING_SYNC_KEY = "deliveryPricing.official.v1";
 
@@ -899,6 +940,7 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureCategorySchema(db);
   await ensureOrderSchema(db);
   await ensureDeliverySchema(db);
+  await ensureAdminDeviceOwnership(db);
 
   // ---- One-time official delivery pricing sync -------------------------
   // Existing databases keep whatever prices they were seeded with unless

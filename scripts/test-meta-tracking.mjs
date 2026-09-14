@@ -3142,6 +3142,164 @@ async function main() {
     JSON.stringify((afterList.devices ?? []).map((d) => d.tokenMasked)),
   );
 
+  section("19) Push authorization security matrix (admin-only recipients)");
+
+  const ATTACK_TOKEN_A = "customer-attack-token-00000000aa";
+  const ATTACK_TOKEN_B = "customer-attack-token-00000000bb";
+  const SPOOF_BODY = {
+    provider: "fcm",
+    token: ATTACK_TOKEN_A,
+    deviceName: "Attacker",
+    // Client-supplied ownership/role fields must be ignored server-side.
+    adminId: 999,
+    userId: 999,
+    isAdmin: true,
+    role: "admin",
+    accountId: 999,
+  };
+
+  // A. Unauthenticated visitor → 401/403.
+  const noAuth = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(SPOOF_BODY),
+  });
+  check("A. unauthenticated registration rejected (401)", noAuth.status === 401, String(noAuth.status));
+
+  // B. Forged session ("customer") → 401; admin cookie WITHOUT CSRF → 401.
+  const forged = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      cookie: "ruven_admin_session=forged-customer-session-token",
+      "x-csrf-token": "deadbeef".repeat(8),
+    },
+    body: JSON.stringify({ ...SPOOF_BODY, token: ATTACK_TOKEN_B }),
+  });
+  check("B1. forged customer session rejected (401)", forged.status === 401, String(forged.status));
+  const noCsrf = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", cookie: auth.cookie },
+    body: JSON.stringify(SPOOF_BODY),
+  });
+  check("B2. admin session without CSRF rejected (401)", noCsrf.status === 401, String(noCsrf.status));
+
+  // D. Customer tokens never land in admin_devices.
+  const devListA = await jfetch(`${BASE}/api/admin/devices`, { headers: adminHeaders }).then((r) => r.json());
+  check(
+    "D. no customer/attacker token stored in admin_devices",
+    !(devListA.devices ?? []).some((d) =>
+      [ATTACK_TOKEN_A, ATTACK_TOKEN_B].some((t) => t.startsWith(String(d.tokenMasked || "").slice(0, 8)) || String(d.tokenMasked || "") === t),
+    ) && !(devListA.devices ?? []).some((d) => String(d.deviceName || "") === "Attacker"),
+  );
+
+  // C + K + L. Authenticated admin registration succeeds; spoofed ownership
+  // fields are ignored (owner = live session admin, never 999).
+  const SEC19_A = "sec19-admin-token-000000000001";
+  const SEC19_B = "sec19-admin-token-000000000002";
+  const regSpoof = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ ...SPOOF_BODY, token: SEC19_A }),
+  }).then((r) => r.json());
+  const regB = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({ provider: "fcm", token: SEC19_B, deviceName: "Suite second phone" }),
+  }).then((r) => r.json());
+  check("C. authenticated admin registration succeeds", regSpoof.ok === true && regB.ok === true);
+
+  const devListB = await jfetch(`${BASE}/api/admin/devices`, { headers: adminHeaders }).then((r) => r.json());
+  const spoofRow = (devListB.devices ?? []).find((d) => String(d.tokenMasked || "").startsWith("sec19-ad"));
+  const normalRow = (devListB.devices ?? []).find((d) => String(d.tokenMasked || "").startsWith("sec19-bd") || String(d.deviceName || "") === "Suite second phone");
+  check(
+    "K. client-supplied adminId/role/userId ignored — owner is session admin",
+    Boolean(spoofRow) &&
+      Number.isInteger(spoofRow.adminId) &&
+      spoofRow.adminId > 0 &&
+      spoofRow.adminId !== 999 &&
+      spoofRow.adminId === normalRow?.adminId,
+    JSON.stringify({ spoof: spoofRow?.adminId, normal: normalRow?.adminId }),
+  );
+  const noAuthSpoof = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...SPOOF_BODY, adminId: 1, role: "admin" }),
+  });
+  check("L. role/user fields cannot force delivery unauthenticated (401)", noAuthSpoof.status === 401, String(noAuthSpoof.status));
+
+  // F + G + E. New order → FCM recipients are EXACTLY the registered admin
+  // devices (multiple supported), never customers/orphans.
+  const sec19Prod = await jfetch(`${BASE}/api/admin/products`, { headers: adminHeaders }).then((r) => r.json());
+  let s19Slug = null;
+  let s19Variant = null;
+  for (const p of sec19Prod.products ?? []) {
+    const detail = await jfetch(`${BASE}/api/admin/products/${p.id}`, { headers: adminHeaders }).then((r) => r.json());
+    const v = (detail.variants ?? []).find((x) => (x.stock ?? 0) > 0 && x.active !== false);
+    if (v) { s19Slug = detail.product?.slug ?? p.slug; s19Variant = v; break; }
+  }
+  const order1 = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fullName: "Security Matrix Tester",
+      phone: "0550000010",
+      commune: "Test",
+      deliveryZone: 16,
+      deliveryMethod: "home",
+      items: [{ slug: s19Slug, size: s19Variant?.size, color: s19Variant?.color, quantity: 1 }],
+    }),
+  }).then((r) => r.json());
+  check("security-matrix order 1 created", order1.ok === true, JSON.stringify(order1).slice(0, 160));
+  await sleep(750);
+
+  const regsFor = (on) =>
+    pushStub.messages.filter((m) => String(m?.message?.webpush?.notification?.body || m?.message?.notification?.body || "").includes(on));
+  const r1 = regsFor(order1.orderNumber).map((m) => m.message.token).sort();
+  const expected1 = [SEC19_A, SEC19_B, "live-fcm-webpush-token-0000000001"].sort();
+  check(
+    "F/G/E. recipients = exactly the registered admin devices (multi-device, no customers)",
+    JSON.stringify(r1) === JSON.stringify(expected1),
+    JSON.stringify({ got: r1, want: expected1 }),
+  );
+  check(
+    "J. exactly one send per admin device per order",
+    r1.length === new Set(r1).size && r1.length === expected1.length,
+  );
+
+  // H. Removed device receives nothing on the next order.
+  const delB = await jfetch(`${BASE}/api/admin/devices`, {
+    method: "DELETE",
+    headers: adminHeaders,
+    body: JSON.stringify({ id: regB.device?.id }),
+  }).then((r) => r.json());
+  const order2 = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      fullName: "Security Matrix Tester",
+      phone: "0550000010",
+      commune: "Test",
+      deliveryZone: 16,
+      deliveryMethod: "home",
+      items: [{ slug: s19Slug, size: s19Variant?.size, color: s19Variant?.color, quantity: 1 }],
+    }),
+  }).then((r) => r.json());
+  await sleep(750);
+  const r2 = regsFor(order2.orderNumber).map((m) => m.message.token).sort();
+  check(
+    "H. removed device receives nothing; remaining admin devices still do",
+    delB.ok === true &&
+      !r2.includes(SEC19_B) &&
+      r2.includes(SEC19_A) &&
+      r2.includes("live-fcm-webpush-token-0000000001"),
+    JSON.stringify(r2),
+  );
+  check(
+    "I. pruned/invalid tokens stay pruned",
+    !(devListB.devices ?? []).some((d) => String(d.tokenMasked || "").startsWith("dead-fcm")),
+  );
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

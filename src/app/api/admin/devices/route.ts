@@ -39,11 +39,16 @@ export async function POST(request: Request) {
   }
   try {
     const body = await request.json();
-    const device = await registerAdminDevice({
-      provider: body.provider,
-      token: body.token,
-      deviceName: body.deviceName,
-    });
+    // Ownership comes EXCLUSIVELY from the verified server-side session —
+    // any client-supplied id/role/user/account field is never read.
+    const device = await registerAdminDevice(
+      {
+        provider: body.provider,
+        token: body.token,
+        deviceName: body.deviceName,
+      },
+      admin.id,
+    );
     return Response.json({ ok: true, device }, { status: 201 });
   } catch (err) {
     if (

@@ -1,13 +1,20 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
 import { db } from "@/db";
-import { adminDevices, adminNotifications, orders, type Order } from "@/db/schema";
+import {
+  adminDevices,
+  adminNotifications,
+  adminUsers,
+  orders,
+  type Order,
+} from "@/db/schema";
 import type { orders as ordersTable } from "@/db/schema";
 import { bootstrapIfNeeded } from "./seed-db";
 import {
   ADMIN_NEW_ORDER_TITLE,
   buildNewOrderPayload,
   getPushConfig,
+  listActiveAdminPushDevices,
   listAdminDevices,
   listAdminNotifications,
   notifyAdminNewOrder,
@@ -36,6 +43,7 @@ let server: {
   close: () => void;
 };
 
+let ADMIN_ID = 0;
 let orderSeq = 0;
 async function insertOrder(
   overrides: Partial<typeof ordersTable.$inferInsert> = {},
@@ -70,6 +78,11 @@ beforeAll(async () => {
     server.listen({ host: "127.0.0.1", port: PORT }, () => resolve()),
   );
   await bootstrapIfNeeded(db);
+  const [firstAdmin] = await db
+    .select({ id: adminUsers.id })
+    .from(adminUsers)
+    .limit(1);
+  ADMIN_ID = firstAdmin.id;
 }, 30_000);
 
 afterAll(async () => {
@@ -120,46 +133,81 @@ describe("getPushConfig (env-driven provider selection)", () => {
 describe("admin device registry", () => {
   it("registers a device and refreshes it on re-registration", async () => {
     const token = "fcm-token-aaaa-bbbb-cccc-dddd-0001";
-    const first = await registerAdminDevice({
-      provider: "fcm",
-      token,
-      deviceName: "Owner Pixel",
-    });
+    const first = await registerAdminDevice(
+      { provider: "fcm", token, deviceName: "Owner Pixel" },
+      ADMIN_ID,
+    );
     expect(first.id).toBeGreaterThan(0);
+    expect(first.adminId).toBe(ADMIN_ID); // server-side ownership stamped
     expect(first.tokenMasked).not.toContain(token); // masked in responses
 
-    const again = await registerAdminDevice({
-      provider: "FCM", // normalized
-      token,
-      deviceName: "Owner Pixel (renamed)",
-    });
+    const again = await registerAdminDevice(
+      { provider: "FCM", token, deviceName: "Owner Pixel (renamed)" }, // normalized
+      ADMIN_ID,
+    );
     expect(again.id).toBe(first.id); // upsert, not duplicate
 
     const devices = await listAdminDevices();
     const mine = devices.filter((d) => d.id === first.id);
     expect(mine).toHaveLength(1);
     expect(mine[0].deviceName).toBe("Owner Pixel (renamed)");
+    expect(mine[0].adminId).toBe(ADMIN_ID);
     expect(await db.$count(adminDevices)).toBe(1);
+  });
+
+  it("excludes ownerless tokens from the push recipient list", async () => {
+    // Legacy/orphan row inserted outside the admin API (no owner).
+    await db
+      .insert(adminDevices)
+      .values({ provider: "fcm", token: "orphan-legacy-token-0000000077" });
+
+    const recipients = await listActiveAdminPushDevices();
+    expect(
+      recipients.some((r) => r.token === "orphan-legacy-token-0000000077"),
+    ).toBe(false); // orphans can NEVER receive admin pushes
+
+    // Registration through the admin path always stamps ownership.
+    const owned = await registerAdminDevice(
+      { provider: "fcm", token: "owned-admin-token-000000000088" },
+      ADMIN_ID,
+    );
+    expect(owned.adminId).toBe(ADMIN_ID);
+    const after = await listActiveAdminPushDevices();
+    expect(
+      after.some((r) => r.token === "owned-admin-token-000000000088"),
+    ).toBe(true);
+    expect(
+      after.every((r) => r.adminId === ADMIN_ID),
+    ).toBe(true);
   });
 
   it("rejects invalid registrations server-side", async () => {
     await expect(
-      registerAdminDevice({ provider: "apns", token: "whatever-long-token-here" }),
+      registerAdminDevice(
+        { provider: "apns", token: "whatever-long-token-here" },
+        ADMIN_ID,
+      ),
     ).rejects.toThrow("Unsupported push provider");
     await expect(
-      registerAdminDevice({ provider: "fcm", token: "short" }),
+      registerAdminDevice({ provider: "fcm", token: "short" }, ADMIN_ID),
     ).rejects.toThrow("Invalid device token");
     await expect(
-      registerAdminDevice({ provider: "fcm", token: "" }),
+      registerAdminDevice({ provider: "fcm", token: "" }, ADMIN_ID),
     ).rejects.toThrow("Invalid device token");
     await expect(
-      registerAdminDevice({ provider: "fcm", token: "bad\u0001token-0000000000" }),
+      registerAdminDevice(
+        { provider: "fcm", token: "bad\u0001token-0000000000" },
+        ADMIN_ID,
+      ),
     ).rejects.toThrow("Invalid device token");
+    await expect(
+      registerAdminDevice({ provider: "fcm", token: "valid-long-token-000" }, 0),
+    ).rejects.toThrow("Invalid admin owner");
   });
 
   it("unregisters a device", async () => {
     const token = "fcm-token-aaaa-bbbb-cccc-dddd-0002";
-    const device = await registerAdminDevice({ provider: "fcm", token });
+    const device = await registerAdminDevice({ provider: "fcm", token }, ADMIN_ID);
     expect(await unregisterAdminDevice(device.id)).toBe(true);
     expect(await unregisterAdminDevice(device.id)).toBe(false);
     expect(await unregisterAdminDevice(999999)).toBe(false);

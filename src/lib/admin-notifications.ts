@@ -3,7 +3,7 @@ import "server-only";
 import { createSign } from "node:crypto";
 import { db } from "@/db";
 import { adminDevices, adminNotifications, type Order } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { formatMoney } from "@/lib/money";
 
 /**
@@ -113,15 +113,27 @@ export function getPushConfig(
 
 const SUPPORTED_PROVIDERS = new Set(["fcm"]);
 
-export async function registerAdminDevice(input: {
-  provider?: unknown;
-  token?: unknown;
-  deviceName?: unknown;
-}): Promise<{ id: number; provider: string; tokenMasked: string }> {
+/**
+ * Register a push device. `adminId` is ALWAYS the server-side authenticated
+ * admin session id passed by the route — any client-supplied id/role/user
+ * field is ignored entirely. Unauthenticated callers never reach this code
+ * (the route enforces session + CSRF first).
+ */
+export async function registerAdminDevice(
+  input: {
+    provider?: unknown;
+    token?: unknown;
+    deviceName?: unknown;
+  },
+  adminId: number,
+): Promise<{ id: number; provider: string; tokenMasked: string; adminId: number }> {
   const provider = String(input.provider ?? "fcm").trim().toLowerCase();
   const token = String(input.token ?? "").trim();
   const deviceName = String(input.deviceName ?? "").trim().slice(0, 120);
 
+  if (!Number.isFinite(adminId) || adminId <= 0) {
+    throw new Error("Invalid admin owner");
+  }
   if (!SUPPORTED_PROVIDERS.has(provider)) {
     throw new Error("Unsupported push provider");
   }
@@ -134,14 +146,43 @@ export async function registerAdminDevice(input: {
 
   const rows = await db
     .insert(adminDevices)
-    .values({ provider, token, deviceName })
+    .values({ provider, token, deviceName, adminId })
     .onConflictDoUpdate({
       target: adminDevices.token,
-      set: { deviceName, lastSeenAt: new Date() },
+      // Re-registration re-stamps ownership from the live session.
+      set: { deviceName, lastSeenAt: new Date(), adminId },
     })
     .returning({ id: adminDevices.id, token: adminDevices.token });
   const row = rows[0];
-  return { id: row.id, provider, tokenMasked: maskToken(row.token) };
+  return { id: row.id, provider, tokenMasked: maskToken(row.token), adminId };
+}
+
+/**
+ * The ONLY recipient list used for new-order pushes: FCM devices owned by an
+ * authenticated admin account. Orphan/ownerless tokens (e.g. legacy rows
+ * predating ownership, or anything inserted outside the admin API) can never
+ * receive admin notifications.
+ */
+export async function listActiveAdminPushDevices(): Promise<
+  Array<{ id: number; token: string; adminId: number }>
+> {
+  const rows = await db
+    .select({
+      id: adminDevices.id,
+      token: adminDevices.token,
+      adminId: adminDevices.adminId,
+    })
+    .from(adminDevices)
+    .where(
+      and(
+        eq(adminDevices.provider, "fcm"),
+        // Server-side authority: recipient = registered ADMIN device only.
+        sql`${adminDevices.adminId} IS NOT NULL`,
+      ),
+    );
+  return rows.filter((r): r is { id: number; token: string; adminId: number } =>
+    r.adminId != null,
+  );
 }
 
 export async function unregisterAdminDevice(id: number): Promise<boolean> {
@@ -158,6 +199,7 @@ export async function listAdminDevices(): Promise<
     provider: string;
     tokenMasked: string;
     deviceName: string;
+    adminId: number | null;
     createdAt: string;
     lastSeenAt: string;
   }>
@@ -171,6 +213,7 @@ export async function listAdminDevices(): Promise<
     provider: r.provider,
     tokenMasked: maskToken(r.token),
     deviceName: r.deviceName,
+    adminId: r.adminId,
     createdAt: r.createdAt.toISOString(),
     lastSeenAt: r.lastSeenAt.toISOString(),
   }));
@@ -224,10 +267,11 @@ export async function notifyAdminNewOrder(order: Order): Promise<NotifyResult> {
     }
     const notificationId = inserted[0].id;
 
-    const devices = await db
-      .select()
-      .from(adminDevices)
-      .where(eq(adminDevices.provider, "fcm"));
+    // Recipients: ONLY FCM devices registered by authenticated admin
+    // accounts (server-side ownership). Customers/public visitors can never
+    // appear in this list — registration is unreachable without an admin
+    // session + CSRF token.
+    const devices = await listActiveAdminPushDevices();
     if (!devices.length) {
       return { created: true, notificationId, devices: 0, delivered: 0 };
     }
@@ -242,7 +286,7 @@ export async function notifyAdminNewOrder(order: Order): Promise<NotifyResult> {
       delivered = await deliverFcm(
         config,
         payload,
-        devices.map((d) => d.token),
+        devices.map((d: { token: string }) => d.token),
         order.id,
       );
     }

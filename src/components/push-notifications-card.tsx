@@ -27,6 +27,13 @@ type DeviceRow = {
 
 type Status = "idle" | "working" | "done" | "denied" | "unsupported" | "error";
 
+/** Same masking as the server (first 8 … last 4) so THIS device can be
+    recognized in the list without ever exposing the full token. */
+function clientMask(token: string): string {
+  if (token.length <= 12) return "•".repeat(token.length);
+  return `${token.slice(0, 8)}…${token.slice(-4)}`;
+}
+
 function deviceLabel(): string {
   const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
   const mobile = /Mobi|Android|iPhone|iPad/i.test(ua) ? "Mobile" : "Desktop";
@@ -48,6 +55,7 @@ export function PushNotificationsCard() {
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
+  const [myMask, setMyMask] = useState("");
 
   async function fetchDevices(): Promise<DeviceRow[]> {
     try {
@@ -168,6 +176,7 @@ export function PushNotificationsCard() {
         return;
       }
       setStatus("done");
+      setMyMask(clientMask(token));
       await loadDevices();
     } catch (err) {
       setStatus("error");
@@ -240,23 +249,29 @@ export function PushNotificationsCard() {
             Registered admin devices ({devices.length})
           </h3>
           <ul className="mt-2 space-y-1.5">
-            {devices.map((d) => (
-              <li
-                key={d.id}
-                className="flex items-center justify-between gap-3 text-xs text-black/70"
-              >
-                <span className="truncate">
-                  {d.deviceName || "Device"} — <code>{d.tokenMasked}</code>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => remove(d.id)}
-                  className="shrink-0 rounded-md border border-black/15 px-2 py-1 font-medium text-black/60 hover:bg-black/5"
+            {devices.map((d) => {
+              const mine = Boolean(myMask) && d.tokenMasked === myMask;
+              return (
+                <li
+                  key={d.id}
+                  className={`flex items-center justify-between gap-3 text-xs ${
+                    mine ? "font-semibold text-green-700" : "text-black/70"
+                  }`}
                 >
-                  Remove
-                </button>
-              </li>
-            ))}
+                  <span className="truncate">
+                    {mine ? "✓ This device — " : ""}
+                    {d.deviceName || "Device"} — <code>{d.tokenMasked}</code>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => remove(d.id)}
+                    className="shrink-0 rounded-md border border-black/15 px-2 py-1 font-medium text-black/60 hover:bg-black/5"
+                  >
+                    Remove
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}

@@ -183,6 +183,13 @@ export const adminDevices = pgTable("admin_devices", {
   provider: text("provider").notNull().default("fcm"),
   token: text("token").notNull().unique(),
   deviceName: text("device_name").notNull().default(""),
+  /**
+   * Server-side ownership: the admin account that registered this device.
+   * Only set from the authenticated admin session (never client input); the
+   * new-order fan-out sends ONLY to devices with a non-null owner, so an
+   * orphan/legacy token can never receive admin pushes.
+   */
+  adminId: integer("admin_id"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   lastSeenAt: timestamp("last_seen_at").notNull().defaultNow(),
 });
