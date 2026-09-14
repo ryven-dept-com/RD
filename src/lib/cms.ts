@@ -2,6 +2,7 @@ import "server-only";
 import { db } from "@/db";
 import { cmsBlocks, settings, type CmsBlock } from "@/db/schema";
 import { asc } from "drizzle-orm";
+import { memoizePerRequest } from "@/lib/cache";
 
 // ---------------------------------------------------------------------------
 // Storefront CMS content model.
@@ -429,7 +430,14 @@ export type CmsData = {
   footer: FooterContent & { hasBlock: boolean };
 };
 
-export async function getCmsData(): Promise<CmsData> {
+/**
+ * Homepage/footer/nav CMS content is read by several components per page
+ * load; memoize within the request so the blocks table is queried once per
+ * render. Never cached across requests — CMS edits go live immediately.
+ */
+export const getCmsData = memoizePerRequest(loadCmsData);
+
+async function loadCmsData(): Promise<CmsData> {
   const rows = await loadBlocks();
   const byType = new Map<string, BlockRow[]>();
   for (const r of rows) {

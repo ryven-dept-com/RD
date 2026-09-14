@@ -42,19 +42,22 @@ export type AdminNotificationPayload = {
 };
 
 /**
- * Build the alert for a new order. Deliberately minimal: order number +
- * total only. The body never contains the customer's name, phone, address
- * or item details (privacy on lock screens).
+ * Build the alert for a new order. Deliberately minimal: order number,
+ * total and order status only. The body never contains the customer's
+ * name, phone, address or item details (privacy on lock screens) — full
+ * order details stay on the secure admin order page.
  */
 export function buildNewOrderPayload(order: Order): AdminNotificationPayload {
   const total = formatMoney(order.total, "fr", order.currency || "DZD");
+  const status = order.status || "جديد";
   return {
     title: ADMIN_NEW_ORDER_TITLE,
-    body: `${order.orderNumber} · ${total}`,
+    body: `${order.orderNumber} · ${total} · ${status}`,
     data: {
       type: NOTIFICATION_TYPE_NEW_ORDER,
       orderId: String(order.id),
       orderNumber: order.orderNumber,
+      status,
     },
   };
 }

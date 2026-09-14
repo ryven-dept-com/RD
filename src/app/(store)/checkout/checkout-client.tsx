@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { lineKey, useCart } from "@/context/cart-context";
@@ -430,9 +431,41 @@ export function CheckoutClient() {
                 <div className="mt-3 space-y-3">
                   {(["home", "office"] as const).map((m) => {
                     const info = selectedZone.methods[m];
-                    if (!info) return null; // method not offered in this zone
                     const selected = deliveryMethod === m;
                     const free = subtotal >= freeShippingThreshold;
+                    // Method not offered in this wilaya: keep it visible but
+                    // clearly unselectable so the customer understands why.
+                    if (!info) {
+                      return (
+                        <div
+                          key={m}
+                          aria-disabled="true"
+                          className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-black/15 bg-black/[0.03] px-4 py-3.5 opacity-70"
+                        >
+                          <span className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              name="deliveryMethod"
+                              disabled
+                              className="h-4 w-4 accent-ink"
+                            />
+                            <span>
+                              <span className="block text-sm font-semibold uppercase tracking-wide text-black/45">
+                                {m === "home"
+                                  ? t("checkout.homeDelivery")
+                                  : t("checkout.pickupOffice")}
+                              </span>
+                              <span className="block text-xs text-black/40">
+                                {t("checkout.methodUnavailable")}
+                              </span>
+                            </span>
+                          </span>
+                          <span className="text-sm font-semibold text-black/35">
+                            —
+                          </span>
+                        </div>
+                      );
+                    }
                     return (
                       <label
                         key={m}
@@ -559,12 +592,15 @@ export function CheckoutClient() {
                 {items.map((item) => (
                   <li key={lineKey(item)} className="flex gap-3">
                     <div className="relative h-20 w-16 shrink-0 overflow-hidden rounded-lg bg-black/5">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="h-full w-full object-cover"
-                      />
+                      {item.image && (
+                        <Image
+                          src={item.image}
+                          alt={item.name}
+                          fill
+                          sizes="64px"
+                          className="object-cover"
+                        />
+                      )}
                       <span className="absolute -end-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-[10px] font-bold text-bone">
                         {item.quantity}
                       </span>

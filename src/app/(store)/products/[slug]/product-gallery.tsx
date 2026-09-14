@@ -2,6 +2,7 @@
 
 import { useT } from "@/i18n/language-context";
 
+import Image from "next/image";
 import { useState } from "react";
 import { ImageLightbox } from "@/components/image-lightbox";
 
@@ -34,12 +35,15 @@ export function ProductGallery({
             }`}
             aria-label={t("product.viewImage", { n: i + 1 })}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={src}
-              alt=""
-              className="h-full w-full object-cover"
-            />
+            {src ? (
+              <Image
+                src={src}
+                alt=""
+                fill
+                sizes="96px"
+                className="object-cover"
+              />
+            ) : null}
           </button>
         ))}
       </div>
@@ -56,13 +60,18 @@ export function ProductGallery({
             {badge}
           </span>
         )}
-        <div className="aspect-[3/4] w-full">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={list[active]}
-            alt={name}
-            className="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
-          />
+        <div className="relative aspect-[3/4] w-full">
+          {list[active] ? (
+            <Image
+              key={list[active]}
+              src={list[active]}
+              alt={name}
+              fill
+              priority={active === 0}
+              sizes="(max-width: 1024px) 100vw, 55vw"
+              className="object-cover transition-transform duration-700 group-hover:scale-105"
+            />
+          ) : null}
         </div>
       </button>
 

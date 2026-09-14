@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { lineKey, useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
@@ -112,12 +113,15 @@ export function CartDrawer() {
                       onClick={closeCart}
                       className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg bg-black/5"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="h-full w-full object-cover"
-                      />
+                      {item.image ? (
+                        <Image
+                          src={item.image}
+                          alt={item.name}
+                          fill
+                          sizes="80px"
+                          className="object-cover"
+                        />
+                      ) : null}
                     </Link>
                     <div className="flex flex-1 flex-col">
                       <div className="flex justify-between gap-2">

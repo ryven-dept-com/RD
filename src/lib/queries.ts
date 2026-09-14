@@ -9,6 +9,7 @@ import {
   type Review,
 } from "@/db/schema";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { memoizePerRequest } from "@/lib/cache";
 import type { ProductCardData } from "@/components/product-card";
 
 export type RatingMap = Map<number, { avg: number; count: number }>;
@@ -206,9 +207,10 @@ export type StorefrontCategory = {
 /**
  * Active categories for the storefront (navigation + filters), ordered by
  * the admin-configured sort position. Disabled categories never reach the
- * public site.
+ * public site. Memoized per request: the navbar, shop filters and category
+ * landings all need it within one page load.
  */
-export async function getStorefrontCategories(): Promise<StorefrontCategory[]> {
+async function loadStorefrontCategories(): Promise<StorefrontCategory[]> {
   try {
     await ensureSeeded();
     const rows = await db
@@ -232,6 +234,8 @@ export async function getStorefrontCategories(): Promise<StorefrontCategory[]> {
     return [];
   }
 }
+
+export const getStorefrontCategories = memoizePerRequest(loadStorefrontCategories);
 
 /** Find one ACTIVE category by name or slug (case-insensitive on name). */
 export async function getActiveCategoryByRef(

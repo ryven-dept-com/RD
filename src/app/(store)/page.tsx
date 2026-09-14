@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { Fragment } from "react";
 import {
@@ -115,21 +116,19 @@ export default async function HomePage() {
               poster={hero.backgroundImage || undefined}
               className="absolute inset-0 h-full w-full object-cover object-center animate-fade-in"
             />
-          ) : (
-            <picture>
-              {hero.backgroundImageMobile && (
-                <source
-                  media="(max-width: 767px)"
-                  srcSet={hero.backgroundImageMobile}
-                />
-              )}
-              <img
-                src={hero.backgroundImage}
-                alt={tr("home.heroAlt")}
-                className="absolute inset-0 h-full w-full object-cover object-center animate-fade-in"
-              />
-            </picture>
-          )}
+          ) : hero.backgroundImage || hero.backgroundImageMobile ? (
+            // next/image replaces the old <picture> fallback: it serves the
+            // mobile-optimized size (AVIF/WebP + responsive srcset) to phones
+            // and never ships the desktop asset to a small screen.
+            <Image
+              src={(hero.backgroundImage || hero.backgroundImageMobile)!}
+              alt={tr("home.heroAlt")}
+              fill
+              priority
+              sizes="100vw"
+              className="object-cover object-center animate-fade-in"
+            />
+          ) : null}
           {hero.audio && <audio src={hero.audio} autoPlay loop className="hidden" />}
           <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-ink/30" />
           <div className="absolute inset-0 bg-gradient-to-r from-ink/60 to-transparent" />
@@ -200,11 +199,12 @@ export default async function HomePage() {
                 className="relative overflow-hidden rounded-2xl bg-ink text-bone"
               >
                 {b.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
+                  <Image
                     src={b.image}
                     alt=""
-                    className="absolute inset-0 h-full w-full object-cover opacity-40"
+                    fill
+                    sizes="100vw"
+                    className="object-cover opacity-40"
                   />
                 )}
                 <div className="relative flex flex-col gap-4 px-6 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-10">
@@ -265,12 +265,15 @@ export default async function HomePage() {
                   tall ? "lg:col-span-2 lg:row-span-2" : ""
                 }`}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={c.image}
-                  alt={c.title}
-                  className="img-zoom absolute inset-0 h-full w-full object-cover opacity-90"
-                />
+                {c.image && (
+                  <Image
+                    src={c.image}
+                    alt={c.title}
+                    fill
+                    sizes="(max-width: 1024px) 100vw, (max-width: 1280px) 50vw, 25vw"
+                    className="img-zoom object-cover opacity-90"
+                  />
+                )}
                 <div className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/10 to-transparent" />
                 <div className="absolute inset-x-0 bottom-0 p-6 text-bone">
                   {c.tag && (
@@ -364,12 +367,15 @@ export default async function HomePage() {
               )}
             </div>
             <div className="relative aspect-[4/5] overflow-hidden rounded-2xl lg:aspect-auto lg:h-[560px]">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={brandStory.image}
-                alt={tr("home.studioAlt")}
-                className="h-full w-full object-cover"
-              />
+              {brandStory.image ? (
+                <Image
+                  src={brandStory.image}
+                  alt={tr("home.studioAlt")}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 45vw"
+                  className="object-cover"
+                />
+              ) : null}
             </div>
           </div>
         </section>

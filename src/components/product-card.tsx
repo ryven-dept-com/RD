@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useStoreConfig } from "@/context/store-context";
 import { useT } from "@/i18n/language-context";
@@ -35,6 +36,9 @@ export function ProductCard({
   const onSale =
     product.compareAtPrice != null && product.compareAtPrice > product.price;
   const secondImage = product.images[1] ?? product.images[0];
+  // A distinct hover image is worth downloading; otherwise the base image
+  // simply stays visible on hover (no blank card, no duplicate payload).
+  const hasHoverImage = Boolean(secondImage) && secondImage !== product.images[0];
 
   return (
     <Link
@@ -43,23 +47,31 @@ export function ProductCard({
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
     >
       <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-100">
-        {/* base image */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={product.images[0]}
-          alt={product.name}
-          loading={priority ? "eager" : "lazy"}
-          className="img-zoom absolute inset-0 h-full w-full object-cover transition-opacity duration-500 group-hover:opacity-0"
-        />
-        {/* hover image */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={secondImage}
-          alt=""
-          aria-hidden="true"
-          loading="lazy"
-          className="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
-        />
+        {/* base image — server-optimized (AVIF/WebP + responsive srcset),
+            sized for the card instead of the full-resolution original */}
+        {product.images[0] ? (
+          <Image
+            src={product.images[0]}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            priority={priority}
+            className={`img-zoom object-cover transition-opacity duration-500 ${
+              hasHoverImage ? "group-hover:opacity-0" : ""
+            }`}
+          />
+        ) : null}
+        {/* hover image (desktop nicety; lazy, hidden on touch-first loads) */}
+        {hasHoverImage ? (
+          <Image
+            src={secondImage}
+            alt=""
+            aria-hidden="true"
+            fill
+            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            className="object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+          />
+        ) : null}
 
         {/* badges */}
         <div className="absolute start-3 top-3 flex flex-col gap-1.5">

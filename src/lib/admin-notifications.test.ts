@@ -167,13 +167,14 @@ describe("admin device registry", () => {
 });
 
 describe("new-order notifications", () => {
-  it("builds a privacy-safe payload (order number + total only)", async () => {
+  it("builds a privacy-safe payload (order number + total + status only)", async () => {
     const order = await insertOrder();
     const payload = buildNewOrderPayload(order);
 
     expect(payload.title).toBe("RYVEN DEPT — New Order");
     expect(payload.body).toContain(order.orderNumber);
     expect(payload.body).toContain("2 509,95"); // formatted total
+    expect(payload.body).toContain(order.status); // order status identified
     expect(payload.body).not.toContain(order.fullName);
     expect(payload.body).not.toContain(order.phone);
     expect(payload.body).not.toContain(order.address);
@@ -182,6 +183,7 @@ describe("new-order notifications", () => {
       type: "new_order",
       orderId: String(order.id),
       orderNumber: order.orderNumber,
+      status: order.status,
     });
   });
 

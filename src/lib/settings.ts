@@ -3,6 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
+import { memoizePerRequest } from "@/lib/cache";
 
 // ---------------------------------------------------------------------------
 // Central settings service (Phase 3).
@@ -308,7 +309,15 @@ function int(map: Record<string, string>, key: string): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : Number(SETTING_DEFS[key].defaultValue);
 }
 
-export async function getStoreSettings(): Promise<StoreSettings> {
+/**
+ * Hot path: every public page renders against store settings (layout,
+ * footer, checkout, product pages). Memoized per request so one page load
+ * issues this query once instead of once per component — but never cached
+ * across requests, so admin edits are visible on the very next page load.
+ */
+export const getStoreSettings = memoizePerRequest(loadStoreSettings);
+
+async function loadStoreSettings(): Promise<StoreSettings> {
   const map = await getSettingsMap();
   const str = (key: string): string =>
     (map[key] ?? "").trim() || SETTING_DEFS[key].defaultValue;

@@ -658,23 +658,108 @@ function hashPassword(password: string): string {
   return `scrypt$${salt}$${derived}`;
 }
 
-const WILAYAS: [number, string, number][] = [
-  [1, "أدرار", 800], [2, "الشلف", 600], [3, "الأغواط", 700], [4, "أم البواقي", 700],
-  [5, "باتنة", 700], [6, "بجاية", 600], [7, "بسكرة", 700], [8, "بشار", 900],
-  [9, "البليدة", 500], [10, "البويرة", 600], [11, "تمنراست", 1000], [12, "تبسة", 750],
-  [13, "تلمسان", 700], [14, "تيارت", 650], [15, "تيزي وزو", 600], [16, "الجزائر", 400],
-  [17, "الجلفة", 700], [18, "جيجل", 650], [19, "سطيف", 650], [20, "سعيدة", 700],
-  [21, "سكيكدة", 650], [22, "سيدي بلعباس", 700], [23, "عنابة", 650], [24, "قالمة", 700],
-  [25, "قسنطينة", 650], [26, "المدية", 600], [27, "مستغانم", 650], [28, "المسيلة", 700],
-  [29, "معسكر", 700], [30, "ورقلة", 850], [31, "وهران", 600], [32, "البيض", 800],
-  [33, "إليزي", 1000], [34, "برج بوعريريج", 650], [35, "بومرداس", 500], [36, "الطارف", 700],
-  [37, "تندوف", 1000], [38, "تيسمسيلت", 700], [39, "الوادي", 800], [40, "خنشلة", 750],
-  [41, "سوق أهراس", 750], [42, "تيبازة", 500], [43, "ميلة", 650], [44, "عين الدفلى", 600],
-  [45, "النعامة", 850], [46, "عين تموشنت", 700], [47, "غرداية", 800], [48, "غليزان", 650],
-  [49, "تيميمون", 900], [50, "برج باجي مختار", 1000], [51, "أولاد جلال", 750],
-  [52, "بني عباس", 950], [53, "عين صالح", 1000], [54, "عين قزام", 1000],
-  [55, "تقرت", 850], [56, "جانت", 1000], [57, "المغير", 800], [58, "المنيعة", 850],
+// Official wilaya delivery price list (business-mandated). Prices are in
+// DA; the store keeps every monetary amount in cents, so values are stored
+// ×100. `null` means the shipping method is not offered for that wilaya;
+// wilayas with no price for either method are seeded as fully disabled.
+// Tuple: [code, Arabic name, à domicile DA|null, STOP DESK DA|null].
+const WILAYAS: [number, string, number | null, number | null][] = [
+  [1, "أدرار", 1100, 600], [2, "الشلف", 700, 400], [3, "الأغواط", 900, 500],
+  [4, "أم البواقي", 650, 400], [5, "باتنة", 700, 500], [6, "بجاية", 700, 400],
+  [7, "بسكرة", 900, 500], [8, "بشار", 1100, 600], [9, "البليدة", 500, 250],
+  [10, "البويرة", 700, 400], [11, "تمنراست", 1300, 600], [12, "تبسة", 700, 400],
+  [13, "تلمسان", 800, 500], [14, "تيارت", 800, 400], [15, "تيزي وزو", 700, 400],
+  [16, "الجزائر", 500, 250], [17, "الجلفة", 900, 500], [18, "جيجل", 600, 400],
+  [19, "سطيف", 700, 400], [20, "سعيدة", 800, 400], [21, "سكيكدة", 600, 400],
+  [22, "سيدي بلعباس", 700, 400], [23, "عنابة", 700, 400], [24, "قالمة", 600, 400],
+  [25, "قسنطينة", 500, 350], [26, "المدية", 700, 400], [27, "مستغانم", 700, 400],
+  [28, "المسيلة", 800, 500], [29, "معسكر", 700, 400], [30, "ورقلة", 900, 500],
+  [31, "وهران", 800, 400], [32, "البيض", 800, 500], [33, "إليزي", 1300, 600],
+  [34, "برج بوعريريج", 700, 400], [35, "بومرداس", 700, 400], [36, "الطارف", 700, 400],
+  [37, "تندوف", 1300, 600], [38, "تيسمسيلت", 800, 400], [39, "الوادي", 900, 500],
+  [40, "خنشلة", 700, 500], [41, "سوق أهراس", 700, 500], [42, "تيبازة", 700, 400],
+  [43, "ميلة", 600, 400], [44, "عين الدفلى", 700, 400], [45, "النعامة", 800, 500],
+  [46, "عين تموشنت", 800, 400], [47, "غرداية", 1000, 500], [48, "غليزان", 700, 400],
+  [49, "تيميمون", 1100, 600], [50, "برج باجي مختار", null, null],
+  [51, "أولاد جلال", 900, 500], [52, "بني عباس", 1100, null],
+  [53, "عين صالح", 1300, 600], [54, "عين قزام", null, null],
+  [55, "تقرت", 900, 500], [56, "جانت", 1100, null], [57, "المغير", 900, null],
+  [58, "المنيعة", 1100, 500],
 ];
+
+/** app_meta marker: the one-time official pricing sync already ran. */
+export const DELIVERY_PRICING_SYNC_KEY = "deliveryPricing.official.v1";
+
+/** Build an insertable delivery-zone row from the official price table. */
+function zoneValuesFromOfficial(
+  code: number,
+  wilaya: string,
+  homeDa: number | null,
+  pickupDa: number | null,
+) {
+  const homePrice = homeDa === null ? 0 : homeDa * 100;
+  const pickupPrice = pickupDa === null ? 0 : pickupDa * 100;
+  return {
+    code,
+    wilaya: `${code} - ${wilaya}`,
+    slug: `wilaya-${code}`,
+    // Legacy single-price column: keep readable for old readers.
+    price: homePrice || pickupPrice,
+    estimatedTime: "2-4 أيام",
+    homeEnabled: homeDa !== null,
+    homePrice,
+    homeEstimatedTime: homeDa === null ? "" : "2-4 أيام",
+    pickupEnabled: pickupDa !== null,
+    pickupPrice,
+    pickupEstimatedTime: pickupDa === null ? "" : "2-4 أيام",
+    sortOrder: code,
+    // Wilayas with no offered method (e.g. 50, 54) are fully disabled.
+    enabled: homeDa !== null || pickupDa !== null,
+  };
+}
+
+/**
+ * One-time official pricing sync for EXISTING databases.
+ *
+ * Fresh databases get the official prices directly from the seed loop
+ * above; databases that were seeded with the older placeholder prices keep
+ * them forever under `onConflictDoNothing` unless we sync once. This runs
+ * exactly once per database (app_meta marker) and upserts the official
+ * per-wilaya prices/availability by zone code. Admins can still customize
+ * prices afterwards in the delivery admin — those edits are never touched
+ * again because the marker prevents reruns.
+ */
+export async function syncOfficialDeliveryPricing(db: SeedDb): Promise<void> {
+  const done = await getAppMeta(db, DELIVERY_PRICING_SYNC_KEY);
+  if (done) return;
+
+  for (const [code, wilaya, homeDa, pickupDa] of WILAYAS) {
+    const zone = zoneValuesFromOfficial(code, wilaya, homeDa, pickupDa);
+    await db
+      .insert(deliveryZones)
+      .values(zone)
+      .onConflictDoUpdate({
+        target: deliveryZones.code,
+        set: {
+          price: zone.price,
+          estimatedTime: zone.estimatedTime,
+          homeEnabled: zone.homeEnabled,
+          homePrice: zone.homePrice,
+          homeEstimatedTime: zone.homeEstimatedTime,
+          pickupEnabled: zone.pickupEnabled,
+          pickupPrice: zone.pickupPrice,
+          pickupEstimatedTime: zone.pickupEstimatedTime,
+          enabled: zone.enabled,
+        },
+      });
+  }
+  await setAppMeta(
+    db,
+    DELIVERY_PRICING_SYNC_KEY,
+    JSON.stringify({ at: new Date().toISOString(), wilayas: WILAYAS.length }),
+  );
+  console.log(`[bootstrap] official delivery pricing synced (${WILAYAS.length} wilayas).`);
+}
 
 const DEFAULT_SETTINGS: Record<string, string> = {
   storeName: "RUVEN DEPT",
@@ -762,28 +847,16 @@ export async function seedAdminData(
   }
   console.log(`Seeded ${cats.length} categories.`);
 
-  // --- delivery zones ---
-  for (const [code, wilaya, price] of WILAYAS) {
-    const zone = {
-      code,
-      wilaya: `${code} - ${wilaya}`,
-      slug: `wilaya-${code}`,
-      price,
-      estimatedTime: "2-4 أيام",
-      // Phase 8: home delivery inherits the legacy price on fresh databases.
-      homeEnabled: true,
-      homePrice: price,
-      homeEstimatedTime: "2-4 أيام",
-      sortOrder: code,
-      enabled: true,
-    };
+  // --- delivery zones (official per-wilaya pricing, stored in cents) ---
+  for (const [code, wilaya, homeDa, pickupDa] of WILAYAS) {
+    const zone = zoneValuesFromOfficial(code, wilaya, homeDa, pickupDa);
     if (reset) {
       await db
         .insert(deliveryZones)
         .values(zone)
         .onConflictDoUpdate({
           target: deliveryZones.code,
-          set: { wilaya: `${code} - ${wilaya}` },
+          set: zone,
         });
     } else {
       await db
@@ -826,6 +899,12 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   await ensureCategorySchema(db);
   await ensureOrderSchema(db);
   await ensureDeliverySchema(db);
+
+  // ---- One-time official delivery pricing sync -------------------------
+  // Existing databases keep whatever prices they were seeded with unless
+  // this runs; it applies the business-mandated wilaya price table exactly
+  // once (idempotent marker in app_meta) and never again.
+  await syncOfficialDeliveryPricing(db);
 
   // ---- One-time catalogue initialization -------------------------------
   // The demo catalogue is seeded exactly once per database, ever — recorded

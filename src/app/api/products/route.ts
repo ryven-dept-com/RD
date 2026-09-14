@@ -19,5 +19,14 @@ export async function GET(request: Request) {
       Number.isFinite(maxPriceRaw) && maxPriceRaw > 0 ? maxPriceRaw : undefined,
   };
   const products = await getProducts(filters);
-  return Response.json({ ok: true, count: products.length, products });
+  return Response.json(
+    { ok: true, count: products.length, products },
+    {
+      headers: {
+        // Public catalogue data: let CDNs/proxies serve repeat reads for
+        // 30s and stale content briefly while revalidating.
+        "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+      },
+    },
+  );
 }

@@ -19,7 +19,16 @@ export async function GET() {
       // settings unavailable — keep the safe default
     }
     const zones = await listActiveZonesPublic();
-    return Response.json({ ok: true, zones, freeShippingThreshold });
+    return Response.json(
+      { ok: true, zones, freeShippingThreshold },
+      {
+        headers: {
+          // Shipping configuration is public read data; checkout still
+          // re-verifies every price server-side at order time.
+          "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120",
+        },
+      },
+    );
   } catch (err) {
     console.error("GET /api/delivery/zones failed:", err);
     return Response.json({ ok: false, error: "Server error" }, { status: 500 });

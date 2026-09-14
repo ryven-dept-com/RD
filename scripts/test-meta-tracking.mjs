@@ -1441,6 +1441,46 @@ async function main() {
     JSON.stringify(algiers),
   );
 
+  // 13.0b Official wilaya pricing table applied by the one-time sync
+  // (prices stored in cents; 500 DA -> 50000).
+  const officialZones = await jfetch(`${BASE}/api/delivery/zones`).then((r) => r.json());
+  const oz = (code) => officialZones.zones.find((z) => z.code === code);
+  check(
+    "official pricing: Alger 16 -> home 500 DA / STOP DESK 250 DA",
+    oz(16)?.methods.home?.price === 50000 &&
+      oz(16)?.methods.office?.price === 25000,
+    JSON.stringify(oz(16)),
+  );
+  check(
+    "official pricing: Adrar 01 -> home 1100 DA / STOP DESK 600 DA",
+    oz(1)?.methods.home?.price === 110000 && oz(1)?.methods.office?.price === 60000,
+    JSON.stringify(oz(1)),
+  );
+  check(
+    "official pricing: Tizi Ouzou 15 -> home 700 DA / STOP DESK 400 DA",
+    oz(15)?.methods.home?.price === 70000 && oz(15)?.methods.office?.price === 40000,
+    JSON.stringify(oz(15)),
+  );
+  check(
+    "official pricing: El Meniaa 58 -> home 1100 DA / STOP DESK 500 DA",
+    oz(58)?.methods.home?.price === 110000 && oz(58)?.methods.office?.price === 50000,
+    JSON.stringify(oz(58)),
+  );
+  check(
+    "official pricing: Beni Abbas 52 offers home delivery only",
+    oz(52)?.methods.home?.price === 110000 && oz(52)?.methods.office === null,
+    JSON.stringify(oz(52)),
+  );
+  check(
+    "official pricing: El M'Ghair 57 offers home delivery only",
+    oz(57)?.methods.home?.price === 90000 && oz(57)?.methods.office === null,
+    JSON.stringify(oz(57)),
+  );
+  check(
+    "official pricing: wilayas 50 & 54 hidden (no delivery offered)",
+    !oz(50) && !oz(54),
+  );
+
   // 13.1 Zone CRUD + validation + safe deletion.
   const dupZone = await jfetch(`${BASE}/api/admin/delivery`, {
     method: "POST",
@@ -1572,8 +1612,10 @@ async function main() {
     `${BASE}/api/delivery/quote?zone=16&method=drone&subtotal=1000`,
   );
   check("quote rejects unknown method (400)", quoteBadMethod.status === 400);
+  // Zone 52 (Beni Abbès) is home-only in the official wilaya price table,
+  // so its STOP DESK method must be rejected.
   const quoteDisabledMethod = await jfetch(
-    `${BASE}/api/delivery/quote?zone=31&method=office&subtotal=1000`,
+    `${BASE}/api/delivery/quote?zone=52&method=office&subtotal=1000`,
   );
   check(
     "quote rejects method disabled for the zone (404)",
@@ -1723,12 +1765,13 @@ async function main() {
   );
 
   // Rejections: unavailable method, inactive zone, unknown zone.
+  // Zone 52 (Beni Abbès) is home-only in the official wilaya price table.
   const officeUnavailable = await jfetch(`${BASE}/api/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...p8Customer,
-      deliveryZone: 31,
+      deliveryZone: 52,
       deliveryMethod: "office",
       items: [p8Item],
     }),
