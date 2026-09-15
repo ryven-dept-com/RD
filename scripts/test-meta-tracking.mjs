@@ -3866,6 +3866,122 @@ async function main() {
     check("M. storefront restored to district", finalHome.includes('data-theme="district"'));
   }
 
+  // -------------------------------------------------------------------------
+  // 22) Final revision regressions — mobile menu, preview isolation and
+  //     business integrity under customized themes
+  // -------------------------------------------------------------------------
+  section("22) Mobile menu, preview isolation, business under customization");
+  {
+    const tHeaders = {
+      "Content-Type": "application/json",
+      "x-csrf-token": auth.csrf,
+      cookie: auth.cookie,
+    };
+
+    // --- mobile menu: closed by default, accessible, no stale overlay ----
+    const homeHtml = await (await jfetch(`${BASE}/`)).text();
+    const menuBlock = homeHtml.match(/id="rd-mobile-menu"[^>]*>/);
+    check(
+      "A. mobile menu SSRs CLOSED (collapsed + hidden + inert)",
+      !!menuBlock &&
+        menuBlock[0].includes("max-h-0") &&
+        menuBlock[0].includes('aria-hidden="true"'),
+    );
+    check(
+      "B. hamburger announces collapsed state + owns the menu",
+      homeHtml.includes('aria-expanded="false"') &&
+        homeHtml.includes('aria-controls="rd-mobile-menu"'),
+    );
+
+    // --- preview UI never leaks to customers ------------------------------
+    check(
+      "C. visitor home/shop/PDP carry no preview UI",
+      !homeHtml.includes("Theme preview:") &&
+        !(await (await jfetch(`${BASE}/shop`)).text()).includes("Theme preview:") &&
+        !(await (await jfetch(`${BASE}/products/${TEST_SLUG}`)).text()).includes("Theme preview:"),
+    );
+    const forgedCookie = "rd_theme_preview=noir:" + "f".repeat(64);
+    const forgedHome = await (await jfetch(`${BASE}/`, { headers: { cookie: forgedCookie } })).text();
+    check(
+      "D. forged preview cookie renders NOTHING (no banner, active theme)",
+      !forgedHome.includes("Theme preview:") && /data-theme="[a-z]+"/.test(forgedHome),
+    );
+
+    // --- business rules frozen under a CUSTOMIZED active theme ------------
+    const custUrl = `${BASE}/api/admin/themes/customizations`;
+    await jfetch(custUrl, {
+      method: "PUT", headers: tHeaders,
+      body: JSON.stringify({ themeId: "district", customization: { colors: { accent: "#aa00bb", buttonBg: "#001122" }, fonts: { display: "oswald" } } }),
+    });
+    const q4999 = await (await jfetch(`${BASE}/api/delivery/quote?zone=16&method=office&subtotal=499900`)).json();
+    check("E1. 4999 DA bureau PAID under customized theme", q4999.ok && q4999.quote.freeShipping === false && q4999.quote.shipping > 0);
+    const q5000 = await (await jfetch(`${BASE}/api/delivery/quote?zone=16&method=office&subtotal=500000`)).json();
+    check("E2. exactly 5000 DA bureau FREE under customized theme", q5000.ok && q5000.quote.freeShipping === true && q5000.quote.shipping === 0);
+    const qHome = await (await jfetch(`${BASE}/api/delivery/quote?zone=16&method=home&subtotal=500000`)).json();
+    check("E3. 5000 DA home delivery stays PAID", qHome.ok && qHome.quote.freeShipping === false && qHome.quote.shipping > 0);
+    const q50 = await (await jfetch(`${BASE}/api/delivery/quote?zone=50&method=office&subtotal=900000`)).json();
+    check("E4. unavailable wilaya stays unavailable", q50.ok === false && q50.code === "ZONE_INACTIVE");
+
+    // order creation still works while a customized theme is active
+    // self-contained product — earlier sections may have archived/deleted the
+    // Phase-5 test product, so never depend on cross-section state here
+    const S22_SLUG = "section22-custom-theme-order-test";
+    await jfetch(`${BASE}/api/admin/products`, {
+      method: "POST", headers: tHeaders,
+      body: JSON.stringify({
+        name: "Section 22 Order Test", slug: S22_SLUG, sku: "S22-TEE",
+        tagline: "regression", description: "Section 22 regression product.",
+        price: "45.00", category: "T-Shirts", collection: "Vault 01",
+        images: "https://images.pexels.com/photo/s22.jpg",
+        sizes: "M", colors: "Onyx",
+        variants: [{ size: "M", color: "Onyx", sku: "S22-M-ONYX", stock: 5, active: true }],
+      }),
+    });
+    const listRes = await (
+      await jfetch(`${BASE}/api/admin/products?q=${encodeURIComponent(S22_SLUG)}`, { headers: tHeaders })
+    ).json();
+    const s22 = (listRes.products || []).find((x) => x.slug === S22_SLUG);
+    const s22Detail = s22
+      ? await (await jfetch(`${BASE}/api/admin/products/${s22.id}`, { headers: tHeaders })).json()
+      : null;
+    const p5Variant = s22Detail?.variants?.find((v) => v.size === "M");
+    if (p5Variant) {
+      const buy = await jfetch(`${BASE}/api/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: "theme-custom@test.local",
+          fullName: "Theme Custom",
+          address: "22 Final Revision St",
+          city: "Setif",
+          postalCode: "19000",
+          country: "Algeria",
+          phone: "+213555000022",
+          commune: "Bab El Oued",
+          deliveryZone: 16,
+          deliveryMethod: "home",
+          items: [{ slug: S22_SLUG, size: "M", color: "Onyx", quantity: 1, variantId: p5Variant.id, sku: "S22-M-ONYX" }],
+        }),
+      }).then((r) => r.json());
+      check("F. order creation works under customized active theme", buy.ok === true && typeof buy.orderNumber === "string", JSON.stringify(buy).slice(0, 200));
+    } else {
+      check("F. order creation works under customized active theme", false, "test product variant unavailable");
+    }
+
+    // customization isolation re-check + cleanup
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "seventh" }),
+    });
+    const seventhHome = await (await jfetch(`${BASE}/`)).text();
+    check("G. district customization does not leak into the seventh storefront", !seventhHome.includes("#aa00bb") && !seventhHome.includes("--font-oswald"));
+    await jfetch(custUrl, { method: "DELETE", headers: tHeaders, body: JSON.stringify({ themeId: "district" }) });
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "district" }),
+    });
+    const endHome = await (await jfetch(`${BASE}/`)).text();
+    check("H. reset + district restored at the end", !endHome.includes("#aa00bb") && endHome.includes('data-theme="district"'));
+  }
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

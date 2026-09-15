@@ -5,10 +5,11 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useCart } from "@/context/cart-context";
 import { useStoreConfig } from "@/context/store-context";
-import { useT } from "@/i18n/language-context";
+import { useLanguage } from "@/i18n/language-context";
 import { SearchBar } from "@/app/(store)/shop/shop-controls";
 import { BagIcon, CloseIcon, MenuIcon } from "./icons";
 import { LanguageSwitcher } from "./language-switcher";
+import { useMobileMenu } from "./use-mobile-menu";
 
 export type NavLink = {
   label: string;
@@ -89,11 +90,17 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
   const { count, openCart } = useCart();
   const { logoUrl, storeName, theme } = useStoreConfig();
   const navTheme = NAV_THEME[theme] ?? NAV_THEME.district;
-  const t = useT();
+  const { locale, t } = useLanguage();
   const pathname = usePathname();
   const label = (l: NavLink) => (l.systemKey ? t(l.systemKey) : l.label);
   const [scrolled, setScrolled] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Mobile menu lives in a dedicated state machine (see use-mobile-menu):
+  // closed by default, closes on link click / route change / language change
+  // / Escape / desktop breakpoint, locks + restores body scroll, and never
+  // leaves a stale overlay mounted.
+  const menu = useMobileMenu(locale);
+  const mobileOpen = menu.open;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -102,22 +109,13 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Close the mobile menu on navigation. Adjusting state during render (the
-  // React-recommended pattern) avoids an extra committed render that a
-  // useEffect-based reset would cause.
-  const [lastPathname, setLastPathname] = useState(pathname);
-  if (lastPathname !== pathname) {
-    setLastPathname(pathname);
-    setMobileOpen(false);
-  }
-
   const onHome = pathname === "/";
   // transparent over hero only at top of home page
   const transparent = onHome && !scrolled && !mobileOpen;
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+      className={`rd-store-header fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         transparent
           ? "rd-nav-over-hero bg-transparent text-bone"
           : "rd-header-solid bg-bone/90 text-ink backdrop-blur-md border-b border-black/10"
@@ -127,8 +125,10 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
         <div className="flex items-center gap-8">
           <button
             className="-ms-2 flex h-11 w-11 items-center justify-center lg:hidden"
-            onClick={() => setMobileOpen((o) => !o)}
+            onClick={menu.toggle}
             aria-label={t("nav.toggleMenu")}
+            aria-expanded={mobileOpen}
+            aria-controls="rd-mobile-menu"
           >
             {mobileOpen ? (
               <CloseIcon className="h-6 w-6" />
@@ -137,7 +137,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
             )}
           </button>
 
-          <Link href="/" className="flex items-baseline gap-1.5">
+          <Link href="/" className="flex items-baseline gap-1.5" onClick={menu.close}>
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -195,8 +195,15 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
       </nav>
 
       {/* Mobile menu — search and language first, then navigation links.
-          Scrollable when the content is taller than the viewport. */}
+          Scrollable when the content is taller than the viewport. The
+          container closes on ANY tap inside it: most nav links navigate by
+          query string (same pathname), so a click-level close is required —
+          pathname-change alone leaves the menu stuck open. `inert` keeps the
+          collapsed menu out of the tab order and off the a11y tree. */}
       <div
+        id="rd-mobile-menu"
+        inert={!mobileOpen}
+        aria-hidden={!mobileOpen}
         className={`rd-mobile-menu border-t border-black/10 bg-bone text-ink transition-[max-height] duration-300 lg:hidden ${
           mobileOpen
             ? "max-h-[calc(100svh-4rem)] overflow-y-auto"
@@ -204,14 +211,18 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
         }`}
       >
         <div className="flex flex-col gap-4 px-4 py-4">
-          <SearchBar targetPath="/shop" />
-          <div>
+          <SearchBar targetPath="/shop" onNavigate={menu.close} />
+          {/* language switches re-render without a route change — the menu
+              must close explicitly when the visitor picks a language */}
+          <div onClick={menu.close}>
             <LanguageSwitcher />
           </div>
           <ul className={`flex flex-col ${navTheme.mobileWrap}`}>
             {links.map((l) => (
               <li key={l.href}>
-                <Link href={l.href} className={navTheme.mobileLink}>
+                {/* closes on click: category links navigate by query string,
+                    which never changes usePathname() */}
+                <Link href={l.href} className={navTheme.mobileLink} onClick={menu.close}>
                   {label(l)}
                 </Link>
               </li>

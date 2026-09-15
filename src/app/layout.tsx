@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 import {
@@ -116,6 +116,16 @@ const notoKufiArabic = Noto_Kufi_Arabic({
   variable: "--font-noto-kufi-arabic",
   display: "swap",
 });
+
+/**
+ * viewport-fit=cover exposes iOS safe-area insets to the CSS
+ * env(safe-area-inset-*) used by the storefront header/preview bar.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
 
 const DEFAULT_SITE_TITLE = "Ruven Dept.";
 const DEFAULT_DESCRIPTION =

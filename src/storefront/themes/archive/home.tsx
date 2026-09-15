@@ -132,7 +132,7 @@ export function ArchiveHome({ data, tr, fmt }: HomeProps) {
       )}
 
       {/* COLLECTIONS — numbered catalog rows */}
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:py-20 sm:px-6 lg:px-8">
         <div className="border-b-2 border-ink pb-4">
           <p className="font-display text-xs italic tracking-[0.25em] text-amber">{tr("home.curatedLines")}</p>
           <h2 className="mt-2 font-display text-4xl font-medium tracking-tight sm:text-5xl">{tr("home.shopByCollection")}</h2>
@@ -166,7 +166,7 @@ export function ArchiveHome({ data, tr, fmt }: HomeProps) {
       </section>
 
       {/* FEATURED — the catalogued grid */}
-      <section className="border-y border-black/15 bg-brand-50 py-20">
+      <section className="border-y border-black/15 bg-brand-50 py-12 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between gap-4 border-b-2 border-ink pb-4">
             <div>
@@ -188,7 +188,7 @@ export function ArchiveHome({ data, tr, fmt }: HomeProps) {
 
       {/* BRAND STORY — archive essay */}
       {brandStory.enabled && (
-        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-7xl px-4 py-12 sm:py-20 sm:px-6 lg:px-8">
           <div className="grid items-start gap-12 lg:grid-cols-2">
             <div className="relative aspect-[4/5] overflow-hidden border border-black/25 bg-brand-50 p-3 lg:aspect-auto lg:h-[560px]">
               {brandStory.image ? (
@@ -235,7 +235,7 @@ export function ArchiveHome({ data, tr, fmt }: HomeProps) {
 
       {/* NEW ARRIVALS — recent acquisitions */}
       {data.newArrivals.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-7xl px-4 pb-12 sm:pb-20 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between gap-4 border-b-2 border-ink pb-4">
             <div>
               <p className="font-display text-xs italic tracking-[0.25em] text-amber">{tr("home.freshIn")}</p>
@@ -255,7 +255,7 @@ export function ArchiveHome({ data, tr, fmt }: HomeProps) {
 
       {/* VALUES — colophon row */}
       <section className="border-t border-black/15 bg-brand-50">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 py-10 sm:py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
           {VALUES.map((v) => (
             <div key={v.titleKey} className="flex flex-col gap-3">
               <v.icon className="h-7 w-7 text-amber" />

@@ -74,6 +74,7 @@ export function SortSelect({ resultCount }: { resultCount: number }) {
 export function SearchBar({
   className = "",
   targetPath,
+  onNavigate,
 }: {
   className?: string;
   /**
@@ -82,6 +83,8 @@ export function SearchBar({
    * itself the prop is omitted and behavior is unchanged (current URL params).
    */
   targetPath?: string;
+  /** Fired after a search submission navigates (lets the mobile menu close). */
+  onNavigate?: () => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -96,12 +99,14 @@ export function SearchBar({
       router.push(
         q ? `${targetPath}?q=${encodeURIComponent(q)}` : targetPath,
       );
+      onNavigate?.();
       return;
     }
     const next = new URLSearchParams(params.toString());
     if (q) next.set("q", q);
     else next.delete("q");
     router.push(`${pathname}?${next.toString()}`, { scroll: false });
+    onNavigate?.();
   };
 
   return (

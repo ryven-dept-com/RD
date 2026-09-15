@@ -135,7 +135,7 @@ export function DistrictHome({ data, tr, fmt }: HomeProps) {
       )}
 
       {/* COLLECTIONS — bento */}
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:py-20 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-black/40">{tr("home.curatedLines")}</p>
@@ -183,7 +183,7 @@ export function DistrictHome({ data, tr, fmt }: HomeProps) {
       </section>
 
       {/* FEATURED */}
-      <section className="bg-brand-50 py-20">
+      <section className="bg-brand-50 py-12 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -252,7 +252,7 @@ export function DistrictHome({ data, tr, fmt }: HomeProps) {
 
       {/* NEW ARRIVALS */}
       {data.newArrivals.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-7xl px-4 py-12 sm:py-20 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-black/40">{tr("home.freshIn")}</p>
@@ -272,7 +272,7 @@ export function DistrictHome({ data, tr, fmt }: HomeProps) {
 
       {/* VALUES */}
       <section className="border-t border-black/10 bg-brand-50">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 py-10 sm:py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
           {VALUES.map((v) => (
             <div key={v.titleKey} className="flex flex-col gap-3">
               <v.icon className="h-7 w-7 text-ink" />

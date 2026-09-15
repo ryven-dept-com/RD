@@ -144,7 +144,7 @@ export function NoirHome({ data, tr, fmt }: HomeProps) {
       )}
 
       {/* COLLECTIONS — monumental split */}
-      <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+      <section className="mx-auto max-w-7xl px-4 py-12 sm:py-20 sm:px-6 lg:px-8">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber">{tr("home.curatedLines")}</p>
@@ -191,7 +191,7 @@ export function NoirHome({ data, tr, fmt }: HomeProps) {
       </section>
 
       {/* FEATURED — cinematic rail */}
-      <section className="border-y border-brand-100 bg-brand-50 py-20">
+      <section className="border-y border-brand-100 bg-brand-50 py-12 sm:py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between gap-4">
             <div>
@@ -225,7 +225,7 @@ export function NoirHome({ data, tr, fmt }: HomeProps) {
             />
           ) : null}
           <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-ink/20" />
-          <div className="relative mx-auto max-w-7xl px-4 py-24 sm:px-6 lg:px-8 lg:py-36">
+          <div className="relative mx-auto max-w-7xl px-4 py-14 sm:py-24 sm:px-6 lg:px-8 lg:py-36">
             <div className="max-w-xl">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber">{tr("home.ethos")}</p>
               <h2 className="mt-3 font-display text-4xl uppercase leading-tight tracking-tight sm:text-5xl">
@@ -260,7 +260,7 @@ export function NoirHome({ data, tr, fmt }: HomeProps) {
 
       {/* NEW ARRIVALS — monumental two-column */}
       {data.newArrivals.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
+        <section className="mx-auto max-w-7xl px-4 py-12 sm:py-20 sm:px-6 lg:px-8">
           <div className="flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber">{tr("home.freshIn")}</p>
@@ -280,7 +280,7 @@ export function NoirHome({ data, tr, fmt }: HomeProps) {
 
       {/* VALUES — hairline service row */}
       <section className="border-t border-brand-100">
-        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-4 py-10 sm:py-14 sm:px-6 lg:grid-cols-4 lg:px-8">
           {VALUES.map((v) => (
             <div key={v.titleKey} className="flex flex-col gap-3">
               <v.icon className="h-7 w-7 text-amber" />
