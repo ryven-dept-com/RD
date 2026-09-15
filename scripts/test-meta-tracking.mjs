@@ -1601,6 +1601,73 @@ async function main() {
     mismatches.join(",") || "58/58 exact",
   );
 
+  // Named spot-checks from the DHT tariff (admin panel = whole DZD, public
+  // storefront = cents). "/" means UNAVAILABLE — never 0 DA, never Free.
+  const dhtPub = await jfetch(`${BASE}/api/delivery/zones`).then((r) => r.json());
+  const pub = (code) => dhtPub.zones.find((z) => z.code === code);
+  const dhtAdminAll = await jfetch(`${BASE}/api/admin/delivery`, { headers: adminHeaders }).then((r) => r.json());
+  const adm = (code) => (dhtAdminAll.zones ?? []).find((z) => z.code === code);
+  check(
+    "DHT spot: 09 Blida home 500 / bureau 250",
+    adm(9)?.homePrice === 500 && adm(9)?.pickupPrice === 250 &&
+      pub(9)?.methods.home?.price === 50000 && pub(9)?.methods.office?.price === 25000,
+    JSON.stringify({ admin: adm(9) && { h: adm(9).homePrice, b: adm(9).pickupPrice }, pub: pub(9)?.methods }),
+  );
+  check(
+    "DHT spot: 16 Alger home 500 / bureau 250",
+    adm(16)?.homePrice === 500 && adm(16)?.pickupPrice === 250 &&
+      pub(16)?.methods.home?.price === 50000 && pub(16)?.methods.office?.price === 25000,
+    JSON.stringify({ admin: adm(16) && { h: adm(16).homePrice, b: adm(16).pickupPrice }, pub: pub(16)?.methods }),
+  );
+  check(
+    "DHT spot: 25 Constantine home 500 / bureau 350",
+    adm(25)?.homePrice === 500 && adm(25)?.pickupPrice === 350 &&
+      pub(25)?.methods.home?.price === 50000 && pub(25)?.methods.office?.price === 35000,
+    JSON.stringify(pub(25)?.methods),
+  );
+  check(
+    "DHT spot: 28 M'Sila home 800 / bureau 500",
+    adm(28)?.homePrice === 800 && adm(28)?.pickupPrice === 500 &&
+      pub(28)?.methods.home?.price === 80000 && pub(28)?.methods.office?.price === 50000,
+    JSON.stringify(pub(28)?.methods),
+  );
+  check(
+    "DHT spot: 50 Bordj Badji Mokhtar home+bureau UNAVAILABLE (hidden)",
+    adm(50)?.homeEnabled === false && adm(50)?.pickupEnabled === false &&
+      adm(50)?.enabled === false && !pub(50),
+    JSON.stringify(adm(50) && { h: adm(50).homeEnabled, b: adm(50).pickupEnabled, en: adm(50).enabled }),
+  );
+  check(
+    "DHT spot: 52 Béni Abbès home 1100 / bureau UNAVAILABLE",
+    adm(52)?.homePrice === 1100 && adm(52)?.homeEnabled === true &&
+      adm(52)?.pickupEnabled === false &&
+      pub(52)?.methods.home?.price === 110000 && pub(52)?.methods.office === null,
+    JSON.stringify(pub(52)?.methods),
+  );
+  check(
+    "DHT spot: 54 In Guezzam home+bureau UNAVAILABLE (hidden)",
+    adm(54)?.homeEnabled === false && adm(54)?.pickupEnabled === false && !pub(54),
+    JSON.stringify(adm(54) && { h: adm(54).homeEnabled, b: adm(54).pickupEnabled }),
+  );
+  check(
+    "DHT spot: 56 Djanet home 1100 / bureau UNAVAILABLE",
+    adm(56)?.homePrice === 1100 && adm(56)?.pickupEnabled === false &&
+      pub(56)?.methods.home?.price === 110000 && pub(56)?.methods.office === null,
+    JSON.stringify(pub(56)?.methods),
+  );
+  check(
+    "DHT spot: 57 El M'Ghair home 900 / bureau UNAVAILABLE",
+    adm(57)?.homePrice === 900 && adm(57)?.pickupEnabled === false &&
+      pub(57)?.methods.home?.price === 90000 && pub(57)?.methods.office === null,
+    JSON.stringify(pub(57)?.methods),
+  );
+  check(
+    "DHT spot: 58 El Meniaa home 1100 / bureau 500",
+    adm(58)?.homePrice === 1100 && adm(58)?.pickupPrice === 500 &&
+      pub(58)?.methods.home?.price === 110000 && pub(58)?.methods.office?.price === 50000,
+    JSON.stringify(pub(58)?.methods),
+  );
+
   // 13.1 Zone CRUD + validation + safe deletion.
   const dupZone = await jfetch(`${BASE}/api/admin/delivery`, {
     method: "POST",
@@ -1742,23 +1809,54 @@ async function main() {
       quoteIncidentOffice.quote.freeShipping === false,
     JSON.stringify(quoteIncidentOffice),
   );
-  const quoteFree = await jfetch(
-    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=1500000`,
+  // BUREAU-ONLY FREE SHIPPING — the threshold is EXACTLY 5,000 DA
+  // (500,000 cents) and applies to STOP DESK / BUREAU only. Home delivery
+  // keeps its configured wilaya price at EVERY subtotal. Zone 16 is
+  // configured 600/350 DA at this point in the suite.
+  const quoteBureauFreeAt5000 = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=500000`,
   ).then((r) => r.json());
   check(
-    "free-shipping threshold applies at/above 15,000 DA (1,500,000 cents)",
-    quoteFree.ok === true &&
-      quoteFree.quote.shipping === 0 &&
-      quoteFree.quote.freeShipping === true,
+    "bureau is FREE at exactly 5,000 DA (inclusive threshold)",
+    quoteBureauFreeAt5000.ok === true &&
+      quoteBureauFreeAt5000.quote.shipping === 0 &&
+      quoteBureauFreeAt5000.quote.freeShipping === true,
+    JSON.stringify(quoteBureauFreeAt5000),
   );
-  const quoteNotFreeJustBelow = await jfetch(
-    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=1499999`,
+  const quoteBureauFreeAbove = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=1000000`,
   ).then((r) => r.json());
   check(
-    "one centime below the threshold still pays the configured price",
-    quoteNotFreeJustBelow.ok === true &&
-      quoteNotFreeJustBelow.quote.shipping === 35000 &&
-      quoteNotFreeJustBelow.quote.freeShipping === false,
+    "bureau stays FREE above 5,000 DA (10,000 DA cart)",
+    quoteBureauFreeAbove.ok === true && quoteBureauFreeAbove.quote.shipping === 0,
+  );
+  const quoteBureauAt4999 = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=499900`,
+  ).then((r) => r.json());
+  check(
+    "bureau at 4,999 DA is NOT free — pays the configured bureau price",
+    quoteBureauAt4999.ok === true &&
+      quoteBureauAt4999.quote.shipping === 35000 &&
+      quoteBureauAt4999.quote.freeShipping === false,
+    JSON.stringify(quoteBureauAt4999),
+  );
+  for (const sub of [500000, 600000, 1000000, 1500000]) {
+    const homeAt = await jfetch(
+      `${BASE}/api/delivery/quote?zone=16&method=home&subtotal=${sub}`,
+    ).then((r) => r.json());
+    check(
+      `home at ${sub / 100} DA is NEVER free (pays 600 DA)`,
+      homeAt.ok === true &&
+        homeAt.quote.shipping === 60000 &&
+        homeAt.quote.freeShipping === false,
+      JSON.stringify(homeAt.quote),
+    );
+  }
+  // Public zones endpoint exposes the threshold in cents.
+  check(
+    "public zones expose the 5,000 DA threshold as 500,000 cents",
+    publicZones.freeShippingThreshold === 500000,
+    String(publicZones.freeShippingThreshold),
   );
 
   // SCREENSHOT SCENARIO (requirement #11): Admin has Home = 500 DA and
@@ -1813,6 +1911,70 @@ async function main() {
     "screenshot scenario: admin reads back 500/250 whole DZD as entered",
     screenshotAdmin.zone?.homePrice === 500 && screenshotAdmin.zone?.pickupPrice === 250,
     JSON.stringify({ home: screenshotAdmin.zone?.homePrice, pickup: screenshotAdmin.zone?.pickupPrice }),
+  );
+
+  // EXACT BOUNDARY MATRIX from the spec (wilaya 16 = 500/250 DA here):
+  // 4999 DA -> Home 500 / Bureau 250 · 5000 DA -> Home 500 / Bureau FREE ·
+  // 6000 DA -> Home 500 / Bureau FREE · 10000 DA -> Home 500 / Bureau FREE.
+  const w16Matrix = [
+    [499900, 50000, 25000, false], // 4,999 DA
+    [500000, 50000, 0, true], //      5,000 DA (inclusive)
+    [600000, 50000, 0, true], //      6,000 DA
+    [1000000, 50000, 0, true], //    10,000 DA
+  ];
+  for (const [sub, homeCents, bureauCents, bureauFree] of w16Matrix) {
+    const h = await jfetch(`${BASE}/api/delivery/quote?zone=16&method=home&subtotal=${sub}`).then((r) => r.json());
+    const b = await jfetch(`${BASE}/api/delivery/quote?zone=16&method=office&subtotal=${sub}`).then((r) => r.json());
+    check(
+      `wilaya 16 @ ${sub / 100} DA: home ${homeCents / 100} DA${bureauFree ? " / bureau FREE" : ` / bureau ${bureauCents / 100} DA`}`,
+      h.quote?.shipping === homeCents && h.quote?.freeShipping === false &&
+        b.quote?.shipping === bureauCents && b.quote?.freeShipping === bureauFree,
+      JSON.stringify({ home: h.quote, bureau: b.quote }),
+    );
+  }
+  // Wilaya 28 M'Sila (official 800/500): 4999 DA -> 800/500 · 5000 DA -> 800/FREE.
+  const w28Below = await Promise.all([
+    jfetch(`${BASE}/api/delivery/quote?zone=28&method=home&subtotal=499900`).then((r) => r.json()),
+    jfetch(`${BASE}/api/delivery/quote?zone=28&method=office&subtotal=499900`).then((r) => r.json()),
+  ]);
+  check(
+    "wilaya 28 M'Sila @ 4,999 DA: home 800 DA / bureau 500 DA",
+    w28Below[0].quote?.shipping === 80000 && w28Below[1].quote?.shipping === 50000 &&
+      w28Below[1].quote?.freeShipping === false,
+    JSON.stringify({ home: w28Below[0].quote, bureau: w28Below[1].quote }),
+  );
+  const w28At = await Promise.all([
+    jfetch(`${BASE}/api/delivery/quote?zone=28&method=home&subtotal=500000`).then((r) => r.json()),
+    jfetch(`${BASE}/api/delivery/quote?zone=28&method=office&subtotal=500000`).then((r) => r.json()),
+  ]);
+  check(
+    "wilaya 28 M'Sila @ 5,000 DA: home 800 DA / bureau FREE",
+    w28At[0].quote?.shipping === 80000 && w28At[0].quote?.freeShipping === false &&
+      w28At[1].quote?.shipping === 0 && w28At[1].quote?.freeShipping === true,
+    JSON.stringify({ home: w28At[0].quote, bureau: w28At[1].quote }),
+  );
+  // Wilaya 25 Constantine (official 500/350): 4999 DA -> 500/350 · 5000 DA -> 500/FREE.
+  const w25Below = await Promise.all([
+    jfetch(`${BASE}/api/delivery/quote?zone=25&method=home&subtotal=499900`).then((r) => r.json()),
+    jfetch(`${BASE}/api/delivery/quote?zone=25&method=office&subtotal=499900`).then((r) => r.json()),
+  ]);
+  check(
+    "wilaya 25 Constantine @ 4,999 DA: home 500 DA / bureau 350 DA",
+    w25Below[0].quote?.shipping === 50000 && w25Below[1].quote?.shipping === 35000,
+    JSON.stringify({ home: w25Below[0].quote, bureau: w25Below[1].quote }),
+  );
+  const w25At = await jfetch(`${BASE}/api/delivery/quote?zone=25&method=office&subtotal=500000`).then((r) => r.json());
+  check(
+    "wilaya 25 Constantine @ 5,000 DA: bureau FREE",
+    w25At.quote?.shipping === 0 && w25At.quote?.freeShipping === true,
+    JSON.stringify(w25At.quote),
+  );
+  // Free shipping must not affect UNAVAILABLE methods (wilaya 52 has no bureau).
+  const w52OfficeFree = await jfetch(`${BASE}/api/delivery/quote?zone=52&method=office&subtotal=1000000`);
+  check(
+    "unavailable bureau (wilaya 52) stays unavailable even above the threshold",
+    w52OfficeFree.status === 404,
+    String(w52OfficeFree.status),
   );
   // Restore 600/350 for the checkout assertions that follow.
   await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
@@ -1965,9 +2127,10 @@ async function main() {
     JSON.stringify(officeBuy),
   );
 
-  // Free shipping over the threshold (zone selected). The threshold is a
-  // whole-DZD store setting (15,000 DA = 1,500,000 cents), so the cart must
-  // genuinely exceed it. Create a high-ticket product for this one order.
+  // Free BUREAU shipping at/above the threshold (zone selected). The
+  // threshold is EXACTLY 5,000 DA = 500,000 cents and applies to STOP
+  // DESK / BUREAU ONLY — home delivery must keep the wilaya price even at
+  // this subtotal. A 5,000 DA product tests the inclusive boundary exactly.
   const FREE_SLUG = "phase8-free-ship-jacket";
   const freeProd = await jfetch(`${BASE}/api/admin/products`, {
     method: "POST",
@@ -1976,8 +2139,8 @@ async function main() {
       name: "Phase8 Free Ship Jacket",
       slug: FREE_SLUG,
       sku: "P8-JACKET",
-      description: "High-ticket item used to cross the free-shipping threshold.",
-      price: "16000.00", // 1,600,000 cents ≥ 1,500,000 threshold
+      description: "5,000 DA item testing the inclusive bureau-free threshold.",
+      price: "5000.00", // 500,000 cents = exactly the 5,000 DA threshold
       category: "Jackets",
       sizes: "L",
       colors: "Sand",
@@ -1990,37 +2153,74 @@ async function main() {
     headers: adminHeaders,
   }).then((r) => r.json());
   const freeVariant = freeDetail.variants.find((v) => v.size === "L");
+  const freeJacketItem = {
+    slug: FREE_SLUG, size: "L", color: "Sand", quantity: 1, variantId: freeVariant.id, sku: "P8-L-SAND",
+  };
+  // Bureau at exactly 5,000 DA -> FREE.
   const freeBuy = await jfetch(`${BASE}/api/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...p8Customer,
       deliveryZone: 16,
-      deliveryMethod: "home",
-      items: [
-        { slug: FREE_SLUG, size: "L", color: "Sand", quantity: 1, variantId: freeVariant.id, sku: "P8-L-SAND" },
-      ],
+      deliveryMethod: "office",
+      items: [freeJacketItem],
     }),
   }).then((r) => r.json());
   check(
-    "free shipping applies at/above the DZD threshold even with a zone",
+    "bureau order at exactly 5,000 DA ships FREE (order created)",
     freeBuy.ok === true && freeBuy.shipping === 0 && freeBuy.total === freeBuy.subtotal,
     JSON.stringify({ subtotal: freeBuy.subtotal, shipping: freeBuy.shipping }),
   );
-  // And just BELOW the threshold the configured zone price is charged again.
-  const belowFreeBuy = await jfetch(`${BASE}/api/checkout`, {
+  // The created order must store delivery_price = 0.
+  const freeOrderList = await jfetch(
+    `${BASE}/api/admin/orders?q=${encodeURIComponent(freeBuy.orderNumber)}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  const freeOrderDetail = await jfetch(
+    `${BASE}/api/admin/orders/${freeOrderList.orders[0]?.id}`,
+    { headers: adminHeaders },
+  ).then((r) => r.json());
+  check(
+    "free-bureau order stores delivery_price = 0 with the bureau method",
+    freeOrderDetail.order?.deliveryMethod === "office" &&
+      freeOrderDetail.order?.deliveryPrice === 0 &&
+      freeOrderDetail.order?.deliveryZoneCode === 16,
+    JSON.stringify({ m: freeOrderDetail.order?.deliveryMethod, dp: freeOrderDetail.order?.deliveryPrice }),
+  );
+  // Home delivery with the SAME 5,000 DA cart must still pay the wilaya
+  // price (600 DA configured for zone 16 here) — home is NEVER free.
+  const homeAtThresholdBuy = await jfetch(`${BASE}/api/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ...p8Customer,
       deliveryZone: 16,
       deliveryMethod: "home",
-      items: [p8Item], // 8,000 cents = 80 DA << 15,000 DA
+      items: [freeJacketItem],
     }),
   }).then((r) => r.json());
   check(
-    "order below the threshold pays the configured zone price (no silent Free)",
-    belowFreeBuy.ok === true && belowFreeBuy.shipping === 60000,
+    "home order at 5,000 DA still pays the configured home price (never free)",
+    homeAtThresholdBuy.ok === true &&
+      homeAtThresholdBuy.shipping === 60000 &&
+      homeAtThresholdBuy.total === homeAtThresholdBuy.subtotal + 60000,
+    JSON.stringify({ subtotal: homeAtThresholdBuy.subtotal, shipping: homeAtThresholdBuy.shipping }),
+  );
+  // And just BELOW the threshold the configured bureau price is charged.
+  const belowFreeBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      deliveryZone: 16,
+      deliveryMethod: "office",
+      items: [p8Item], // 8,000 cents = 80 DA << 5,000 DA
+    }),
+  }).then((r) => r.json());
+  check(
+    "bureau order below the threshold pays the configured price (no silent Free)",
+    belowFreeBuy.ok === true && belowFreeBuy.shipping === 35000,
     JSON.stringify({ subtotal: belowFreeBuy.subtotal, shipping: belowFreeBuy.shipping }),
   );
 
@@ -2423,8 +2623,8 @@ async function main() {
     homeFr.status === 200 && /<html[^>]*lang="fr"/.test(homeFr.text) && /<html[^>]*dir="ltr"/.test(homeFr.text),
   );
   check(
-    "FR home shows translated UI + French number format",
-    homeFr.text.includes("Livraison express gratuite") && homeFr.text.includes("15 000 DA"),
+    "FR home shows translated UI + French number format (5,000 DA threshold)",
+    homeFr.text.includes("Livraison express gratuite") && homeFr.text.includes("5 000 DA"),
   );
 
   // C. Language switcher present + cookie contract shipped to the client.

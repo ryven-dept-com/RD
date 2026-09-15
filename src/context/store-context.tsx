@@ -46,7 +46,7 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   logoUrl: "",
   checkoutEnabled: true,
   codEnabled: true,
-  freeShippingThreshold: 15000,
+  freeShippingThreshold: 5000,
   minOrderAmount: 0,
   requirePhone: false,
   requireAddress: true,

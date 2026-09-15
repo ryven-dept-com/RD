@@ -40,7 +40,7 @@ export const SETTING_DEFS: Record<string, SettingDef> = {
   // ---- Checkout ----
   checkoutEnabled: { kind: "bool", defaultValue: "true", label: "Checkout enabled" },
   codEnabled: { kind: "bool", defaultValue: "true", label: "Cash on Delivery" },
-  freeShippingThreshold: { kind: "int", defaultValue: "15000", label: "Free shipping threshold" },
+  freeShippingThreshold: { kind: "int", defaultValue: "5000", label: "Free shipping threshold" },
   minOrderAmount: { kind: "int", defaultValue: "0", label: "Minimum order amount" },
   requirePhone: { kind: "bool", defaultValue: "false", label: "Require phone" },
   requireAddress: { kind: "bool", defaultValue: "true", label: "Require address" },

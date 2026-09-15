@@ -19,10 +19,13 @@ const SHIPPING_FLAT = 995;
 
 /**
  * The free-shipping threshold is a store SETTING expressed in WHOLE DZD
- * (the number the admin enters, e.g. 15000 = 15,000 DA). Every amount in
+ * (the number the admin enters, e.g. 5000 = 5,000 DA). Every amount in
  * the cart/order pipeline (subtotal, shipping, totals) is INTEGER CENTS,
  * so the threshold is converted once here and all comparisons use cents.
  * Comparing DZD against cents directly made every cart look "free".
+ *
+ * Rule: free shipping applies to STOP DESK / BUREAU only, at or above the
+ * threshold. HOME DELIVERY always keeps the configured wilaya price.
  */
 const DZD_TO_CENTS = 100;
 
@@ -141,11 +144,10 @@ export function CheckoutClient() {
   // Cents-based threshold for comparison against the cents subtotal.
   const freeShippingThresholdCents = freeShippingThreshold * DZD_TO_CENTS;
 
-  const shipping = effectiveQuote
-    ? effectiveQuote.shipping
-    : subtotal >= freeShippingThresholdCents
-      ? 0
-      : SHIPPING_FLAT;
+  // Before a wilaya is selected there is no zone quote: show the legacy
+  // flat preview. Free shipping is bureau-only and requires a zone, so the
+  // preview is never "Free" (the server recomputes everything at order time).
+  const shipping = effectiveQuote ? effectiveQuote.shipping : SHIPPING_FLAT;
   const total = subtotal + shipping;
   const belowMinimum = minOrderAmount > 0 && subtotal < minOrderAmount;
 
@@ -444,10 +446,11 @@ export function CheckoutClient() {
                   {(["home", "office"] as const).map((m) => {
                     const info = selectedZone.methods[m];
                     const selected = deliveryMethod === m;
-                    // Show the zone's configured price; only a cart that has
-                    // actually reached the (cents-converted) free threshold
-                    // may display "Free".
-                    const free = subtotal >= freeShippingThresholdCents;
+                    // Free shipping is BUREAU-ONLY at/above the (cents-
+                    // converted) threshold; home always shows the wilaya
+                    // price. Until then show the configured price.
+                    const free =
+                      m === "office" && subtotal >= freeShippingThresholdCents;
                     // Method not offered in this wilaya: keep it visible but
                     // clearly unselectable so the customer understands why.
                     if (!info) {

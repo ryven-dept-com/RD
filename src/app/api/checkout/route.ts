@@ -24,7 +24,7 @@ import {
 export const dynamic = "force-dynamic";
 
 const SHIPPING_FLAT = 995; // flat rate used below the free-shipping threshold
-const FALLBACK_FREE_SHIP_THRESHOLD = 15000;
+const FALLBACK_FREE_SHIP_THRESHOLD = 5000; // whole DZD (bureau-only free shipping)
 
 type IncomingItem = {
   slug: string;
@@ -270,10 +270,10 @@ export async function POST(request: Request) {
       deliveryZoneName = zone.wilaya;
       deliveryEstimate = quote.estimatedTime;
     } else {
-      // Legacy clients that send no zone: the free-shipping threshold is a
-      // whole-DZD store setting, the subtotal is integer cents — convert
-      // before comparing (a raw comparison made every order "free").
-      shipping = subtotal >= freeShipThreshold * 100 ? 0 : SHIPPING_FLAT;
+      // Legacy clients that send no zone keep the flat rate. Free shipping
+      // is BUREAU-ONLY and a zone-less order has no bureau method, so it is
+      // never free here (and home delivery is never free either).
+      shipping = SHIPPING_FLAT;
     }
 
     const total = subtotal + shipping;

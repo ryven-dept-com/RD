@@ -7,7 +7,7 @@ import { getStoreSettings } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
-const FALLBACK_FREE_SHIP_THRESHOLD = 15000;
+const FALLBACK_FREE_SHIP_THRESHOLD = 5000; // whole DZD (bureau-only free shipping)
 
 /**
  * Public (Phase 8): server-computed shipping quote for the checkout UX.

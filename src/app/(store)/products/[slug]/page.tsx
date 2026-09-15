@@ -180,7 +180,7 @@ export default async function ProductPage({
                 icon: TruckIcon,
                 label: tr("product.perkShipping", {
                   amount: formatWholeMoney(
-                    store?.freeShippingThreshold ?? 15000,
+                    store?.freeShippingThreshold ?? 5000,
                     locale,
                     iso,
                   ),

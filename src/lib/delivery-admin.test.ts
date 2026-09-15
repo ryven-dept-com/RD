@@ -47,30 +47,56 @@ describe("shipping quote (server-side calculation)", () => {
     expect(q?.estimatedTime).toBe("1-3 أيام");
   });
 
-  it("applies the free-shipping threshold at exactly the threshold", () => {
-    // Threshold 15,000 DA = 1,500,000 cents.
-    const q = quoteShipping(ZONE, "home", 1_500_000, 15_000);
+  it("bureau ships free at exactly the 5,000 DA threshold (inclusive)", () => {
+    // 5,000 DA = 500,000 cents.
+    const q = quoteShipping(ZONE, "office", 500_000, 5_000);
     expect(q?.shipping).toBe(0);
     expect(q?.freeShipping).toBe(true);
   });
 
-  it("does NOT ship free just below the threshold", () => {
-    const q = quoteShipping(ZONE, "home", 1_499_999, 15_000);
-    expect(q?.shipping).toBe(70_000);
+  it("bureau is NOT free one centime below the threshold", () => {
+    const q = quoteShipping(ZONE, "office", 499_999, 5_000);
+    expect(q?.shipping).toBe(45_000);
     expect(q?.freeShipping).toBe(false);
   });
 
-  it("production incident: a realistic 2,500 DA cart is not free (regression)", () => {
+  it("home delivery is NEVER free, even far above the threshold", () => {
+    for (const subtotal of [500_000, 600_000, 1_000_000, 1_500_000, 10_000_000]) {
+      const q = quoteShipping(ZONE, "home", subtotal, 5_000);
+      expect(q?.shipping).toBe(70_000);
+      expect(q?.freeShipping).toBe(false);
+    }
+  });
+
+  it("free bureau shipping never resurrects an unavailable method", () => {
+    expect(quoteShipping({ ...ZONE, pickupEnabled: false }, "office", 999_999_999, 5_000)).toBeNull();
+    expect(quoteShipping({ ...ZONE, homeEnabled: false }, "home", 999_999_999, 5_000)).toBeNull();
+    expect(quoteShipping({ ...ZONE, enabled: false }, "office", 999_999_999, 5_000)).toBeNull();
+  });
+
+  it("DHT scenario: 500/250 DA wilaya quotes exact prices below the threshold", () => {
     // Algiers-style zone configured at 500 DA home / 250 DA stop desk.
-    // The old code compared 250,000 (cents) >= 15,000 (DZD) -> always free,
-    // hiding the configured prices. The quote must now return them in cents.
+    // The old code compared cents >= DZD directly, quoting "Free" for every
+    // realistic cart and hiding the configured prices.
     const algiers = { ...ZONE, homePrice: 500, pickupPrice: 250 };
-    const home = quoteShipping(algiers, "home", 250_000, 15_000);
-    const office = quoteShipping(algiers, "office", 250_000, 15_000);
+    const home = quoteShipping(algiers, "home", 250_000, 5_000);
+    const office = quoteShipping(algiers, "office", 250_000, 5_000);
     expect(home?.shipping).toBe(50_000);
     expect(home?.freeShipping).toBe(false);
     expect(office?.shipping).toBe(25_000);
     expect(office?.freeShipping).toBe(false);
+  });
+
+  it("DHT scenario at >=5,000 DA: home still paid, bureau free", () => {
+    const algiers = { ...ZONE, homePrice: 500, pickupPrice: 250 };
+    for (const subtotal of [500_000, 600_000, 1_000_000]) {
+      const home = quoteShipping(algiers, "home", subtotal, 5_000);
+      const office = quoteShipping(algiers, "office", subtotal, 5_000);
+      expect(home?.shipping).toBe(50_000);
+      expect(home?.freeShipping).toBe(false);
+      expect(office?.shipping).toBe(0);
+      expect(office?.freeShipping).toBe(true);
+    }
   });
 
   it("rejects inactive zones", () => {

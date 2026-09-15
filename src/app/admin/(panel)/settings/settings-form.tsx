@@ -371,11 +371,12 @@ export function SettingsForm({
               inputMode="numeric"
               value={form.freeShippingThreshold}
               onChange={set("freeShippingThreshold")}
-              placeholder="15000"
+              placeholder="5000"
               className={inputCls}
             />
             <p className="mt-1 text-xs text-slate-400">
-              Orders at or above this amount ship free.
+              Stop desk / bureau orders at or above this amount (in DA) ship
+              free. Home delivery always keeps the wilaya price.
             </p>
           </div>
           <div>

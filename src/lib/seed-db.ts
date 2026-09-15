@@ -884,12 +884,92 @@ export async function normalizeDeliveryZoneUnits(db: SeedDb): Promise<void> {
   );
 }
 
+/** app_meta marker: the DHT tariff enforcement already ran. */
+export const DELIVERY_DHT_ENFORCED_KEY = "deliveryPricing.dhtEnforced.v1";
+
+/**
+ * One-time enforcement of the business-mandated DHT tariff table.
+ *
+ * The uploaded DHT tariff images are the ONLY source of truth for wilaya
+ * delivery prices; they are already encoded verbatim in `WILAYAS` above
+ * (verified programmatically against the exact 58-row list). This pass
+ * re-applies those exact prices + availability to every zone code on
+ * databases where an earlier sync stored legacy values (e.g. cents, or an
+ * older placeholder table), so the Admin Delivery panel and the storefront
+ * quote from the identical, correct table. Prices are written as whole DZD
+ * (the canonical admin unit). Marker-gated and idempotent; admin edits
+ * made AFTER this ran are respected because the marker prevents reruns.
+ */
+export async function enforceDhtDeliveryPricing(db: SeedDb): Promise<void> {
+  const done = await getAppMeta(db, DELIVERY_DHT_ENFORCED_KEY);
+  if (done) return;
+
+  for (const [code, wilaya, homeDa, pickupDa] of WILAYAS) {
+    const zone = zoneValuesFromOfficial(code, wilaya, homeDa, pickupDa);
+    await db
+      .insert(deliveryZones)
+      .values(zone)
+      .onConflictDoUpdate({
+        target: deliveryZones.code,
+        set: {
+          price: zone.price,
+          estimatedTime: zone.estimatedTime,
+          homeEnabled: zone.homeEnabled,
+          homePrice: zone.homePrice,
+          homeEstimatedTime: zone.homeEstimatedTime,
+          pickupEnabled: zone.pickupEnabled,
+          pickupPrice: zone.pickupPrice,
+          pickupEstimatedTime: zone.pickupEstimatedTime,
+          enabled: zone.enabled,
+        },
+      });
+  }
+  await setAppMeta(
+    db,
+    DELIVERY_DHT_ENFORCED_KEY,
+    JSON.stringify({ at: new Date().toISOString(), wilayas: WILAYAS.length }),
+  );
+  console.log(
+    `[bootstrap] DHT tariff enforced for ${WILAYAS.length} wilayas (whole DZD).`,
+  );
+}
+
+/** app_meta marker: the bureau-only free-shipping threshold already moved to 5000 DA. */
+export const FREE_SHIP_BUREAU_5000_KEY = "freeShipping.bureauOnly5000.v1";
+
+/**
+ * One-time migration of the free-shipping threshold to the new business
+ * rule: EXACTLY 5,000 DA, and it applies to STOP DESK / BUREAU only (see
+ * quoteShipping). The old default was 15,000 DA and applied to every
+ * method; that made real orders quote "Free" incorrectly. Existing stores
+ * keep whatever value they have ONLY if it is already 5000; any other
+ * stored value (including the legacy 15000 default) is corrected once.
+ */
+export async function migrateBureauFreeThreshold(db: SeedDb): Promise<void> {
+  const done = await getAppMeta(db, FREE_SHIP_BUREAU_5000_KEY);
+  if (done) return;
+
+  await db.execute(sql`
+    UPDATE "settings"
+    SET "value" = '5000'
+    WHERE "key" = 'freeShippingThreshold' AND "value" <> '5000'
+  `);
+  await setAppMeta(
+    db,
+    FREE_SHIP_BUREAU_5000_KEY,
+    JSON.stringify({ at: new Date().toISOString(), thresholdDa: 5000 }),
+  );
+  console.log(
+    "[bootstrap] free-shipping threshold set to 5,000 DA (bureau-only).",
+  );
+}
+
 const DEFAULT_SETTINGS: Record<string, string> = {
   storeName: "RUVEN DEPT",
   contactEmail: "hello@ruvendept.dz",
   contactPhone: "+213 555 00 00 00",
   address: "Algiers, Algeria",
-  freeShippingThreshold: "15000",
+  freeShippingThreshold: "5000",
   currency: "دج",
   announcement: "Free shipping over $150",
   // --- Phase 3 (professional settings). Additive only: existing databases
@@ -1035,6 +1115,16 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   // (×100): canonical storage is whole DZD, matching what the Admin
   // Delivery panel shows and edits. Idempotent, marker-gated.
   await normalizeDeliveryZoneUnits(db);
+
+  // ---- One-time DHT tariff enforcement ----------------------------------
+  // Re-applies the exact business-mandated 58-wilaya DHT table (whole DZD)
+  // so Admin and the storefront always quote from it. Marker-gated.
+  await enforceDhtDeliveryPricing(db);
+
+  // ---- One-time free-shipping rule migration ----------------------------
+  // Threshold becomes EXACTLY 5,000 DA and applies to bureau/stop-desk
+  // only; home delivery always keeps its wilaya price. Marker-gated.
+  await migrateBureauFreeThreshold(db);
 
   // ---- One-time catalogue initialization -------------------------------
   // The demo catalogue is seeded exactly once per database, ever — recorded

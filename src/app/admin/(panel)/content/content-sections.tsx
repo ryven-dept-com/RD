@@ -587,7 +587,7 @@ export function AnnouncementEditor({
           <TextInput
             value={draft.text}
             onChange={(v) => set("text", v)}
-            placeholder="FREE SHIPPING OVER 15000 DZD"
+            placeholder="FREE BUREAU SHIPPING OVER 5000 DZD"
           />
         </Field>
         <Field label="Link (optional)" hint="Makes the message clickable">

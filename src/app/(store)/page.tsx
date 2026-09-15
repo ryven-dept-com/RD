@@ -72,7 +72,7 @@ export default async function HomePage() {
   // Safe fallbacks keep the USP copy rendering even if settings are
   // temporarily unavailable (matches DEFAULT_STORE_CONFIG).
   const freeShipAmount = formatWholeMoney(
-    store?.freeShippingThreshold ?? 15000,
+    store?.freeShippingThreshold ?? 5000,
     locale,
     isoCurrencyCode(store?.currency ?? "دج"),
   );

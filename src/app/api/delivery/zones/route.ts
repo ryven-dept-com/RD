@@ -13,7 +13,7 @@ export async function GET() {
   try {
     // The setting is stored in whole DZD; the public API only ever emits
     // INTEGER CENTS so no client can mix the units up.
-    let freeShippingThresholdCents = 15000 * 100;
+    let freeShippingThresholdCents = 5000 * 100;
     try {
       const store = await getStoreSettings();
       freeShippingThresholdCents = store.freeShippingThreshold * 100;

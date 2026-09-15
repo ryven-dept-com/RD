@@ -167,9 +167,10 @@ export type ShippingQuote = {
  *  1. the zone must be active and the method enabled for it,
  *  2. shipping = the zone's configured method price (whole DZD in the DB,
  *     returned in cents),
- *  3. the free-shipping threshold still applies: subtotal at or above the
- *     threshold ships free (explicit store-setting rule). Both sides are
- *     compared in cents.
+ *  3. FREE SHIPPING applies to STOP DESK / BUREAU ONLY: an order subtotal at
+ *     or above the free-shipping threshold (store setting, whole DZD —
+ *     5,000 DA = 500,000 cents) ships bureau free. HOME DELIVERY ALWAYS
+ *     keeps its configured wilaya price, at any subtotal.
  *
  * Compute the authoritative shipping fee for a zone + method.
  *
@@ -178,11 +179,11 @@ export type ShippingQuote = {
  * @param subtotalCents   cart subtotal in INTEGER CENTS (store-wide unit)
  * @param freeShipThresholdDa  the store setting, in WHOLE DZD
  *
- * Production incident fixed here: the threshold used to be compared raw
- * against the cents subtotal (15000 DA vs 250000 cents), which made EVERY
- * cart "free" and hid the prices Admin had configured. Both sides are now
- * normalized to cents before comparing; the configured zone price is
- * returned as cents so it lands in order totals unchanged.
+ * Unit-incident history: the threshold used to be compared raw against the
+ * cents subtotal (DZD vs cents), which made every cart "free" and hid the
+ * configured prices. Both sides are normalized to cents before comparing,
+ * and the configured zone price is returned as cents so it lands in order
+ * totals unchanged.
  */
 export function quoteShipping(
   zone: { enabled: boolean; homeEnabled: boolean; pickupEnabled: boolean; homePrice: number; pickupPrice: number; homeEstimatedTime: string; pickupEstimatedTime: string; estimatedTime: string },
@@ -191,19 +192,21 @@ export function quoteShipping(
   freeShipThresholdDa: number,
 ): ShippingQuote | null {
   if (!zone.enabled) return null;
-  const freeThresholdCents = daToCents(freeShipThresholdDa);
-  const free = subtotalCents >= freeThresholdCents;
   if (method === "home") {
+    // Home delivery is NEVER free — the configured wilaya price applies at
+    // every subtotal, including at/above the free-shipping threshold.
     if (!zone.homeEnabled) return null;
     return {
       method,
-      shipping: free ? 0 : daToCents(zone.homePrice),
-      freeShipping: free,
+      shipping: daToCents(zone.homePrice),
+      freeShipping: false,
       estimatedTime: zone.homeEstimatedTime || zone.estimatedTime,
     };
   }
   if (method === "office") {
     if (!zone.pickupEnabled) return null;
+    const freeThresholdCents = daToCents(freeShipThresholdDa);
+    const free = subtotalCents >= freeThresholdCents;
     return {
       method,
       shipping: free ? 0 : daToCents(zone.pickupPrice),
