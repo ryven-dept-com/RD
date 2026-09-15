@@ -41,6 +41,7 @@ export const SETTING_DEFS: Record<string, SettingDef> = {
   checkoutEnabled: { kind: "bool", defaultValue: "true", label: "Checkout enabled" },
   codEnabled: { kind: "bool", defaultValue: "true", label: "Cash on Delivery" },
   freeShippingThreshold: { kind: "int", defaultValue: "5000", label: "Free shipping threshold" },
+  activeTheme: { kind: "text", max: 30, defaultValue: "district", label: "Active storefront theme" },
   minOrderAmount: { kind: "int", defaultValue: "0", label: "Minimum order amount" },
   requirePhone: { kind: "bool", defaultValue: "false", label: "Require phone" },
   requireAddress: { kind: "bool", defaultValue: "true", label: "Require address" },
@@ -274,6 +275,8 @@ export type StoreSettings = {
   checkoutEnabled: boolean;
   codEnabled: boolean;
   freeShippingThreshold: number;
+  /** Active storefront theme id (validated against the theme registry). */
+  activeTheme: string;
   minOrderAmount: number;
   requirePhone: boolean;
   requireAddress: boolean;
@@ -331,6 +334,7 @@ async function loadStoreSettings(): Promise<StoreSettings> {
     checkoutEnabled: bool(map, "checkoutEnabled"),
     codEnabled: bool(map, "codEnabled"),
     freeShippingThreshold: int(map, "freeShippingThreshold"),
+    activeTheme: str("activeTheme"),
     minOrderAmount: int(map, "minOrderAmount"),
     requirePhone: bool(map, "requirePhone"),
     requireAddress: bool(map, "requireAddress"),

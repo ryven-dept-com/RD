@@ -102,6 +102,29 @@ export function csrfTokenFor(sessionToken: string): string {
   return createHmac("sha256", SECRET).update(sessionToken).digest("hex");
 }
 
+// ---------- Theme preview tokens (admin-only) --------------------------------
+// A preview lets an authenticated admin walk the storefront in a non-active
+// theme. The token is an HMAC only the server can mint (it signs with the
+// same secret that protects admin sessions), so customers can neither forge
+// a preview nor activate themes — the storefront validates the token
+// server-side and ignores it otherwise.
+
+export function signThemePreviewToken(themeId: string): string {
+  return createHmac("sha256", SECRET).update(`rd-theme:${themeId}`).digest("hex");
+}
+
+export function verifyThemePreviewToken(themeId: string, token: string): boolean {
+  if (!themeId || !token) return false;
+  try {
+    const expected = Buffer.from(signThemePreviewToken(themeId), "hex");
+    const provided = Buffer.from(token, "hex");
+    if (expected.length !== provided.length) return false;
+    return timingSafeEqual(expected, provided);
+  } catch {
+    return false;
+  }
+}
+
 export async function getCsrfToken(): Promise<string> {
   const store = await cookies();
   const token = store.get(SESSION_COOKIE)?.value;

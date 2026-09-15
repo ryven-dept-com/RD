@@ -15,6 +15,7 @@ const NAV = [
   { label: "Customers", href: "/admin/customers", icon: "M16 7a4 4 0 11-8 0 4 4 0 018 0zM4 21v-1a6 6 0 016-6h4a6 6 0 016 6v1" },
   { label: "Content", href: "/admin/content", icon: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" },
   { label: "Marketing", href: "/admin/marketing", icon: "M3 10v4a1 1 0 001 1h2l1 5h2l-1-5h2l9 4V5l-9 4H4a1 1 0 00-1 1z" },
+  { label: "Themes", href: "/admin/themes", icon: "M3 5h18v4H3zM3 11h8v8H3zM13 11h8v8h-8z" },
   { label: "Analytics", href: "/admin/analytics", icon: "M4 20v-7M10 20V6M16 20v-10M2 20h20" },
   { label: "Settings", href: "/admin/settings", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 00-1.7-1L14.5 2h-4l-.3 3a7 7 0 00-1.7 1l-2.4-1-2 3.4L4 11a7 7 0 000 2l-2 1.6 2 3.4 2.4-1a7 7 0 001.7 1l.3 3h4l.3-3a7 7 0 001.7-1l2.4 1 2-3.4-2-1.6a7 7 0 00.1-1z" },
 ];

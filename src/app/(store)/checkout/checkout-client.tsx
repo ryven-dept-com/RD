@@ -260,7 +260,7 @@ export function CheckoutClient() {
   // ---- Confirmation ----
   if (confirmation) {
     return (
-      <div className="min-h-screen bg-bone pt-16">
+      <div className="rd-needs-offset min-h-screen bg-bone pt-16">
         <div className="mx-auto max-w-2xl px-4 py-20 text-center sm:px-6">
           <div className="mx-auto flex h-16 w-16 animate-scale-in items-center justify-center rounded-full bg-olive text-bone">
             <CheckIcon className="h-8 w-8" />
@@ -318,7 +318,7 @@ export function CheckoutClient() {
   // ---- Empty cart ----
   if (items.length === 0) {
     return (
-      <div className="min-h-screen bg-bone pt-16">
+      <div className="rd-needs-offset min-h-screen bg-bone pt-16">
         <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
           <h1 className="font-display text-4xl uppercase tracking-tight sm:text-5xl">
             {t("checkout.emptyTitle")}
@@ -343,7 +343,7 @@ export function CheckoutClient() {
     "w-full rounded-lg border border-black/15 bg-bone px-4 py-3 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink";
 
   return (
-    <div className="min-h-screen bg-bone pt-16">
+    <div className="rd-needs-offset min-h-screen bg-bone pt-16">
       <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         <h1 className="font-display text-4xl uppercase tracking-tight sm:text-5xl">
           {t("checkout.title")}

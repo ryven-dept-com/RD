@@ -970,6 +970,7 @@ const DEFAULT_SETTINGS: Record<string, string> = {
   contactPhone: "+213 555 00 00 00",
   address: "Algiers, Algeria",
   freeShippingThreshold: "5000",
+  activeTheme: "district",
   currency: "دج",
   announcement: "Free shipping over $150",
   // --- Phase 3 (professional settings). Additive only: existing databases

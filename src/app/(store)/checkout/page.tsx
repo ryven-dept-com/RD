@@ -22,7 +22,7 @@ export default async function CheckoutPage() {
 
   if (!checkoutEnabled) {
     return (
-      <div className="min-h-screen bg-bone pt-16">
+      <div className="rd-needs-offset min-h-screen bg-bone pt-16">
         <div className="mx-auto max-w-2xl px-4 py-24 text-center sm:px-6">
           <h1 className="font-display text-4xl uppercase tracking-tight sm:text-5xl">
             Checkout unavailable

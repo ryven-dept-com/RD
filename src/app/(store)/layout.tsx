@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { CartProvider } from "@/context/cart-context";
 import {
   DEFAULT_STORE_CONFIG,
@@ -15,6 +16,8 @@ import {
   getCmsData,
 } from "@/lib/cms";
 import { getStoreSettings } from "@/lib/settings";
+import { resolveStorefrontTheme } from "@/lib/theme-server";
+import "../theme.css";
 
 export default async function StoreLayout({
   children,
@@ -30,6 +33,11 @@ export default async function StoreLayout({
   let config: StoreConfig = DEFAULT_STORE_CONFIG;
   let socialLinks = DEFAULT_FOOTER.socialLinks;
 
+  // Theme system: active theme comes from settings (memoized per request —
+  // zero extra queries); an admin live-preview can override presentation via
+  // a validated HMAC cookie without writing anything.
+  const { preview, rendered } = await resolveStorefrontTheme();
+
   try {
     const [cms, store] = await Promise.all([getCmsData(), getStoreSettings()]);
     footerContent = cms.footer;
@@ -43,6 +51,7 @@ export default async function StoreLayout({
       storeName: store.storeName,
       currency: store.currency,
       logoUrl: store.logoUrl,
+      theme: rendered.id,
       checkoutEnabled: store.checkoutEnabled,
       codEnabled: store.codEnabled,
       freeShippingThreshold: store.freeShippingThreshold,
@@ -75,15 +84,30 @@ export default async function StoreLayout({
     <StoreConfigProvider config={config}>
       <MetaPixel />
       <CartProvider>
-        <Navbar />
-        <CartDrawer />
-        <main className="min-h-screen">{children}</main>
-        <Footer
-          content={{ ...footerContent, socialLinks }}
-          newsletter={newsletterContent}
-          contact={contact}
-          storeName={config.storeName}
-        />
+        <div
+          data-theme={rendered.id}
+          className={preview ? "rd-has-preview min-h-dvh bg-bone text-ink" : "min-h-dvh bg-bone text-ink"}
+        >
+          {preview && (
+            <div className="rd-preview-bar">
+              <span aria-hidden>◐</span>
+              <span>
+                Theme preview: {preview.name} — not live
+              </span>
+              <Link href="/api/theme/preview?exit=1">Exit</Link>
+              <Link href="/admin/themes">Themes</Link>
+            </div>
+          )}
+          <Navbar />
+          <CartDrawer />
+          <main className="min-h-screen">{children}</main>
+          <Footer
+            content={{ ...footerContent, socialLinks }}
+            newsletter={newsletterContent}
+            contact={contact}
+            storeName={config.storeName}
+          />
+        </div>
       </CartProvider>
     </StoreConfigProvider>
   );

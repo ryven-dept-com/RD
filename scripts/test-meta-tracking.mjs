@@ -3643,6 +3643,102 @@ async function main() {
     !(devListB.devices ?? []).some((d) => String(d.tokenMasked || "").startsWith("dead-fcm")),
   );
 
+  // -------------------------------------------------------------------------
+  // 20) Storefront theme system — registry, admin activation, secure preview
+  // -------------------------------------------------------------------------
+  section("20) Storefront theme system — registry, activation, secure preview");
+  {
+    const tHeaders = {
+      "Content-Type": "application/json",
+      "x-csrf-token": auth.csrf,
+      cookie: auth.cookie,
+    };
+    const homeBefore = await (await jfetch(`${BASE}/`)).text();
+    check("A. storefront stamps an active theme (data-theme)", /data-theme="[a-z]+"/.test(homeBefore));
+    check("B. admin panel preview banner absent for visitors", !homeBefore.includes("Theme preview:"));
+
+    // theme stylesheet ships with the storefront (concatenate every CSS file)
+    const cssHrefs = [...new Set(homeBefore.match(/\/_next\/static\/css\/[^"]+\.css/g) || [])];
+    let cssText = "";
+    for (const href of cssHrefs) cssText += await (await jfetch(`${BASE}${href}`)).text();
+    // minified CSS drops attribute quotes: accept both forms
+    const hasNoir = cssText.includes('data-theme="noir"') || cssText.includes("data-theme=noir");
+    const hasSignature = cssText.includes('data-theme="signature"') || cssText.includes("data-theme=signature");
+    check("C. theme token layer present in storefront CSS", hasNoir && hasSignature);
+
+    // admin-only APIs
+    const anonList = await jfetch(`${BASE}/api/admin/themes`);
+    check("D. anonymous theme list blocked", anonList.status === 401);
+    const list = await (await jfetch(`${BASE}/api/admin/themes`, { headers: tHeaders })).json();
+    check(
+      "E. admin sees 6 distinct production themes",
+      list.ok && list.themes.length === 6 && new Set(list.themes.map((t) => t.id)).size === 6,
+    );
+    check("F. active theme reported", typeof list.activeTheme === "string" && list.activeTheme.length > 0);
+
+    // preview: admin-only token, cookie-gated rendering, never activates
+    const anonToken = await jfetch(`${BASE}/api/admin/themes/preview-token`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ themeId: "noir" }),
+    });
+    check("G. anonymous preview token blocked", anonToken.status === 401);
+    const pt = await (
+      await jfetch(`${BASE}/api/admin/themes/preview-token`, {
+        method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "noir" }),
+      })
+    ).json();
+    check("H. admin mints preview token", pt.ok && typeof pt.token === "string");
+    const gw = await jfetch(
+      `${BASE}/api/theme/preview?rd_theme=noir&token=${encodeURIComponent(pt.token)}&next=/shop`,
+      { redirect: "manual" },
+    );
+    const previewCookie = (gw.headers.get("set-cookie") || "").split(";")[0];
+    check("I. preview gateway sets httpOnly cookie → /shop", gw.status === 302 && gw.headers.get("location") === "/shop" && previewCookie.startsWith("rd_theme_preview=noir:"));
+    const previewed = await (await jfetch(`${BASE}/`, { headers: { cookie: previewCookie } })).text();
+    check("J. preview renders selected theme + banner", previewed.includes('data-theme="noir"') && previewed.includes("Theme preview:"));
+    const stillList = await (await jfetch(`${BASE}/api/admin/themes`, { headers: tHeaders })).json();
+    check("K. preview did not activate anything", stillList.activeTheme === list.activeTheme);
+    const forged = await jfetch(`${BASE}/api/theme/preview?rd_theme=noir&token=${"f".repeat(64)}&next=/`, { redirect: "manual" });
+    check("L. forged preview token rejected", forged.status === 302 && !forged.headers.get("set-cookie"));
+    const openRedir = await jfetch(`${BASE}/api/theme/preview?rd_theme=noir&token=${encodeURIComponent(pt.token)}&next=//evil.example`, { redirect: "manual" });
+    check("M. preview redirect cannot leave the site", openRedir.headers.get("location") === "/");
+
+    // activation: admin-only, presentation-only, instant, persistent
+    const anonAct = await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ themeId: "noir" }),
+    });
+    check("N. anonymous activation blocked", anonAct.status === 401);
+    const badAct = await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "hacked-theme" }),
+    });
+    check("O. unknown theme activation rejected", badAct.status === 400);
+    const act = await (
+      await jfetch(`${BASE}/api/admin/themes/activate`, {
+        method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "noir" }),
+      })
+    ).json();
+    check("P. admin activates NOIR DEPT", act.ok && act.activeTheme === "noir");
+    const homeNoir = await (await jfetch(`${BASE}/`)).text();
+    check("Q. storefront switches instantly for visitors", homeNoir.includes('data-theme="noir"') && !homeNoir.includes("Theme preview:"));
+    const pdpNoir = await (await jfetch(`${BASE}/products/apex-low-sneaker-bone`)).text();
+    check(
+      "R. PDP intact under theme (SEO metadata, gallery, purchase hooks)",
+      pdpNoir.includes('data-theme="noir"') &&
+        pdpNoir.includes("rd-pdp--cinematic") &&
+        pdpNoir.includes('property="og:title"') &&
+        pdpNoir.includes("rd-gallery-frame"),
+    );
+    const listAfter = await (await jfetch(`${BASE}/api/admin/themes`, { headers: tHeaders })).json();
+    check("S. activation persisted in settings", listAfter.activeTheme === "noir");
+    const arNoir = await (await jfetch(`${BASE}/`, { headers: { cookie: "rd-locale=ar" } })).text();
+    check("T. Arabic RTL + themed storefront together", arNoir.includes('dir="rtl"') && arNoir.includes('data-theme="noir"'));
+
+    // restore house look
+    const restore = await putSettings(auth, { activeTheme: "district" });
+    check("U. restore district via settings PATCH", restore.status === 200 && restore.body.ok !== false);
+    const homeRestored = await (await jfetch(`${BASE}/`)).text();
+    check("V. storefront back to district", homeRestored.includes('data-theme="district"'));
+  }
+
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);
   if (failed) {
     console.log("\nFailures:");

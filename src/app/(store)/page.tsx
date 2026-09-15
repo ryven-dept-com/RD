@@ -24,6 +24,7 @@ import {
 import { cookies } from "next/headers";
 import { LOCALE_COOKIE, resolveLocale, translate } from "@/i18n/translations";
 import { getStoreSettings } from "@/lib/settings";
+import { resolveStorefrontTheme } from "@/lib/theme-server";
 import { formatWholeMoney, isoCurrencyCode } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,11 @@ export default async function HomePage() {
   const tr = (key: string, vars?: Record<string, string | number>) =>
     translate(locale, key, vars);
 
+  // Theme registry: the rendered theme decides structural variants (hero
+  // composition etc.). Settings read is memoized per request — no extra DB
+  // work.
+  const { rendered: theme } = await resolveStorefrontTheme();
+
   const [cms, store] = await Promise.all([
     getCmsData(),
     getStoreSettings().catch(() => null),
@@ -105,7 +111,9 @@ export default async function HomePage() {
     <>
       {/* HERO */}
       {hero.enabled && (
-        <section className="relative flex min-h-[100svh] items-end overflow-hidden bg-ink text-bone">
+        <section
+          className={`rd-hero rd-hero--${theme.hero} rd-dark-panel relative flex min-h-[100svh] items-end overflow-hidden bg-ink text-bone`}
+        >
           {hero.video ? (
             <video
               src={hero.video}
@@ -130,11 +138,11 @@ export default async function HomePage() {
             />
           ) : null}
           {hero.audio && <audio src={hero.audio} autoPlay loop className="hidden" />}
-          <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-ink/30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-ink/60 to-transparent" />
+          <div className="rd-hero-veil rd-hero-veil-a absolute inset-0 bg-gradient-to-t from-ink via-ink/40 to-ink/30" />
+          <div className="rd-hero-veil rd-hero-veil-b absolute inset-0 bg-gradient-to-r from-ink/60 to-transparent" />
 
-          <div className="relative mx-auto w-full max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8 lg:pb-24">
-            <p className="animate-fade-up text-xs font-semibold uppercase tracking-[0.3em] text-bone/70 delay-100">
+          <div className="rd-hero-inner relative mx-auto w-full max-w-7xl px-4 pb-16 pt-28 sm:px-6 lg:px-8 lg:pb-24">
+            <p className="rd-hero-eyebrow animate-fade-up text-xs font-semibold uppercase tracking-[0.3em] text-bone/70 delay-100">
               {hero.eyebrow}
             </p>
             <h1 className="animate-fade-up delay-200 mt-4 max-w-4xl font-display text-6xl uppercase leading-[0.9] tracking-tight sm:text-7xl lg:text-8xl">
@@ -147,7 +155,7 @@ export default async function HomePage() {
               {hero.primaryText && (
                 <Link
                   href={hero.primaryLink || "/shop"}
-                  className="group flex items-center gap-2 rounded-full bg-bone px-8 py-4 text-sm font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
+                  className="rd-cta group flex items-center gap-2 rounded-full bg-bone px-8 py-4 text-sm font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
                 >
                   {hero.primaryText}
                   <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1 rtl:-scale-x-100" />
@@ -156,7 +164,7 @@ export default async function HomePage() {
               {hero.secondaryText && (
                 <Link
                   href={hero.secondaryLink || "/shop"}
-                  className="rounded-full border border-bone/40 px-8 py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-colors hover:bg-bone/10"
+                  className="rd-cta rounded-full border border-bone/40 px-8 py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-colors hover:bg-bone/10"
                 >
                   {hero.secondaryText}
                 </Link>
@@ -167,7 +175,7 @@ export default async function HomePage() {
       )}
 
       {/* MARQUEE */}
-      <section className="border-y border-ink/10 bg-ink py-3 text-bone">
+      <section className="rd-dark-panel border-y border-ink/10 bg-ink py-3 text-bone">
         <div className="relative flex overflow-hidden">
           <div className="animate-marquee flex shrink-0 items-center gap-8 whitespace-nowrap pe-8">
             {[...marquee, ...marquee].map((m, i) => (
@@ -196,7 +204,7 @@ export default async function HomePage() {
             {banners.map((b) => (
               <div
                 key={b.id ?? b.title}
-                className="relative overflow-hidden rounded-2xl bg-ink text-bone"
+                className="rd-dark-panel relative overflow-hidden rounded-2xl bg-ink text-bone"
               >
                 {b.image && (
                   <Image
@@ -223,7 +231,7 @@ export default async function HomePage() {
                   {b.ctaText && (
                     <Link
                       href={b.ctaLink || "/shop"}
-                      className="shrink-0 rounded-full bg-bone px-6 py-3 text-center text-xs font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
+                      className="rd-cta shrink-0 rounded-full bg-bone px-6 py-3 text-center text-xs font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
                     >
                       {b.ctaText}
                     </Link>
@@ -261,7 +269,7 @@ export default async function HomePage() {
               <Link
                 key={`${c.title}-${i}`}
                 href={c.link || "/shop"}
-                className={`group relative overflow-hidden rounded-2xl bg-ink ${
+                className={`rd-dark-panel group relative overflow-hidden rounded-2xl bg-ink ${
                   tall ? "lg:col-span-2 lg:row-span-2" : ""
                 }`}
               >
@@ -330,7 +338,7 @@ export default async function HomePage() {
 
       {/* BRAND STORY */}
       {brandStory.enabled && (
-        <section className="relative overflow-hidden bg-ink text-bone">
+        <section className="rd-dark-panel relative overflow-hidden bg-ink text-bone">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-2 lg:px-8 lg:py-28">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.25em] text-bone/50">
@@ -359,7 +367,7 @@ export default async function HomePage() {
               {brandStory.ctaText && (
                 <Link
                   href={brandStory.ctaLink || "/shop"}
-                  className="mt-10 inline-flex items-center gap-2 rounded-full bg-bone px-8 py-4 text-sm font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
+                  className="rd-cta mt-10 inline-flex items-center gap-2 rounded-full bg-bone px-8 py-4 text-sm font-semibold uppercase tracking-widest text-ink transition-transform hover:scale-105"
                 >
                   {brandStory.ctaText}
                   <ArrowRightIcon className="h-4 w-4 rtl:-scale-x-100" />

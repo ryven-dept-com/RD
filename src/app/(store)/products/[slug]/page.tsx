@@ -12,6 +12,7 @@ import {
   translate,
 } from "@/i18n/translations";
 import { cookies } from "next/headers";
+import { resolveStorefrontTheme } from "@/lib/theme-server";
 import { ProductCard } from "@/components/product-card";
 import { StarRating } from "@/components/star-rating";
 import { CheckIcon, RefreshIcon, TruckIcon } from "@/components/icons";
@@ -45,9 +46,12 @@ export default async function ProductPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [detail, store] = await Promise.all([
+  // resolveStorefrontTheme() shares the memoized per-request settings read —
+  // the PDP keeps its optimized query budget (no extra DB round-trips).
+  const [detail, store, themeRes] = await Promise.all([
     getProductBySlug(slug),
     getStoreSettings().catch(() => null),
+    resolveStorefrontTheme(),
   ]);
   if (!detail) notFound();
 
@@ -81,7 +85,7 @@ export default async function ProductPage({
   }));
 
   return (
-    <div className="bg-bone pt-16">
+    <div className={`rd-pdp rd-pdp--${themeRes.rendered.pdp} rd-needs-offset bg-bone pt-16`}>
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <nav className="flex items-center gap-2 text-xs uppercase tracking-widest text-black/40">
           <Link href="/" className="hover:text-ink">
@@ -100,15 +104,15 @@ export default async function ProductPage({
       </div>
 
       {/* main */}
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 pb-16 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8">
+      <div className="rd-pdp-grid mx-auto grid max-w-7xl gap-10 px-4 pb-16 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8">
         <ProductGallery
           images={product.images}
           name={product.name}
           badge={badge}
         />
 
-        <div className="lg:py-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-black/40">
+        <div className="rd-pdp-info lg:py-2">
+          <p className="rd-pdp-kicker text-xs font-semibold uppercase tracking-[0.25em] text-black/40">
             {product.collection} · {product.category}
           </p>
           <h1 className="mt-2 font-display text-4xl uppercase leading-tight tracking-tight sm:text-5xl">

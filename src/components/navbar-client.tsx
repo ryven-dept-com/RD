@@ -50,7 +50,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
     <header
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         transparent
-          ? "bg-transparent text-bone"
+          ? "rd-nav-over-hero bg-transparent text-bone"
           : "bg-bone/90 text-ink backdrop-blur-md border-b border-black/10"
       }`}
     >

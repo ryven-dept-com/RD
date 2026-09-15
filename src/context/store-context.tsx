@@ -8,6 +8,7 @@ import {
 } from "react";
 import { formatMoney, isoCurrencyCode } from "@/lib/money";
 import { useLanguage } from "@/i18n/language-context";
+import type { ThemeId } from "@/themes/types";
 
 /**
  * Storefront configuration provided by the server (read from the database in
@@ -27,6 +28,11 @@ export type StoreConfig = {
   storeName: string;
   currency: string;
   logoUrl: string;
+  /**
+   * Presentation-only: which storefront theme is rendered (active theme or
+   * an admin preview). Never affects data, queries or business logic.
+   */
+  theme: ThemeId;
   checkoutEnabled: boolean;
   codEnabled: boolean;
   freeShippingThreshold: number;
@@ -44,6 +50,7 @@ export const DEFAULT_STORE_CONFIG: StoreConfig = {
   storeName: "RUVEN DEPT",
   currency: "دج",
   logoUrl: "",
+  theme: "district",
   checkoutEnabled: true,
   codEnabled: true,
   freeShippingThreshold: 5000,

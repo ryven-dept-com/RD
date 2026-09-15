@@ -268,7 +268,7 @@ export function ProductPurchase(props: PurchaseProps) {
         <button
           onClick={handleBuyNow}
           disabled={!canBuy}
-          className={`group flex flex-1 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold uppercase tracking-widest transition-transform ${
+          className={`rd-atc rd-cta group flex flex-1 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold uppercase tracking-widest transition-transform ${
             canBuy
               ? "bg-ink text-bone hover:scale-[1.02]"
               : "cursor-not-allowed bg-black/10 text-black/40"

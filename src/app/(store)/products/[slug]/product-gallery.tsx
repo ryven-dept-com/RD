@@ -53,7 +53,7 @@ export function ProductGallery({
         type="button"
         onClick={() => list[active] && setViewerOpen(true)}
         aria-label={t("product.viewImage", { n: active + 1 })}
-        className="group relative block w-full flex-1 cursor-zoom-in overflow-hidden rounded-2xl bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+        className="rd-gallery-frame group relative block w-full flex-1 cursor-zoom-in overflow-hidden rounded-2xl bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
       >
         {badge && (
           <span className="absolute start-4 top-4 z-10 rounded-full bg-ink px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-bone">

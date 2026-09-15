@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
-import { Anton, Inter } from "next/font/google";
+import { Anton, Fraunces, Inter, Space_Grotesk } from "next/font/google";
 import { getStoreSettings } from "@/lib/settings";
 import { LanguageProvider } from "@/i18n/language-context";
 import { LOCALE_COOKIE, localeDir, resolveLocale } from "@/i18n/translations";
@@ -17,6 +17,22 @@ const anton = Anton({
   weight: "400",
   subsets: ["latin"],
   variable: "--font-anton",
+  display: "swap",
+});
+
+// Theme fonts: Space Grotesk (RAW CONCRETE / NIGHT SHIFT display voice) and
+// Fraunces (ARCHIVE / SIGNATURE editorial serif). Browsers only download a
+// font file when the active theme actually renders it — inactive themes cost
+// nothing beyond a tiny @font-face declaration.
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-space-grotesk",
+  display: "swap",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
   display: "swap",
 });
 
@@ -85,7 +101,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   }
 
   return (
-    <html lang={locale} dir={localeDir(locale)} className={`${inter.variable} ${anton.variable}`}>
+    <html
+      lang={locale}
+      dir={localeDir(locale)}
+      className={`${inter.variable} ${anton.variable} ${spaceGrotesk.variable} ${fraunces.variable}`}
+    >
       <body className="bg-bone text-ink antialiased">
         <LanguageProvider initialLocale={locale}>{children}</LanguageProvider>
       </body>

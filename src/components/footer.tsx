@@ -22,7 +22,7 @@ export function Footer({ content, newsletter, contact, storeName }: FooterProps)
     Boolean(contact.email || contact.phone || contact.address);
 
   return (
-    <footer className="bg-ink text-bone">
+    <footer className="rd-dark-panel bg-ink text-bone">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div
           className={`grid gap-12 ${

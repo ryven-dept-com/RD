@@ -168,7 +168,7 @@ export default async function ShopPage({
                 : tr("nav.shopAll");
 
   return (
-    <div className="bg-bone pt-16">
+    <div className="rd-needs-offset bg-bone pt-16">
       {/* header band */}
       <div className="border-b border-black/10 bg-brand-50">
         <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">

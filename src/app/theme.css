@@ -1,0 +1,671 @@
+/* ============================================================================
+   RYVEN DEPT THEME SYSTEM
+   ----------------------------------------------------------------------------
+   Six production-ready storefront art directions driven by CSS custom
+   properties. The active theme is stamped on the storefront root as
+   [data-theme="<id>"]; every palette utility (bg-bone, text-ink, …) resolves
+   through --rd-* variables defined here, and each theme adds its own
+   structural layer (hero / cards / PDP / chrome).
+
+   Rules honored throughout:
+   - logical properties only (inset-inline, padding-inline, border-inline)
+     so Arabic RTL needs zero extra work;
+   - prefers-reduced-motion is enforced globally in globals.css;
+   - nothing here touches data, queries or business logic.
+   ========================================================================== */
+
+/* ----------------------------------------------------------------------------
+   1. THEME TOKENS
+   -------------------------------------------------------------------------- */
+
+/* --- 01 NOIR DEPT — dark luxury, almost-black, editorial gold ------------- */
+[data-theme="noir"] {
+  color-scheme: dark;
+  --rd-ink: #f2efe8;
+  --rd-ink-soft: #e6e2d8;
+  --rd-bone: #0a0a0b;
+  --rd-sand: #232326;
+  --rd-clay: #8f8371;
+  --rd-amber: #c9a86a;
+  --rd-olive: #9aa08a;
+  --rd-brand-50: #131315;
+  --rd-brand-100: #26262b;
+  --rd-brand-400: #9d988c;
+  --rd-brand-500: #b5afa0;
+  --rd-brand-900: #f2efe8;
+  --rd-panel: #101012;
+  --rd-panel-soft: #17171a;
+  --rd-panel-fg: #f2efe8;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-anton), "Arial Narrow", sans-serif;
+}
+
+/* --- 02 RAW CONCRETE — industrial brutalist, hard borders, signal orange -- */
+[data-theme="concrete"] {
+  --rd-ink: #111113;
+  --rd-ink-soft: #1d1d20;
+  --rd-bone: #d8d6d1;
+  --rd-sand: #bdb8ae;
+  --rd-clay: #6d685f;
+  --rd-amber: #e33f1e;
+  --rd-olive: #46503f;
+  --rd-brand-50: #cfcac2;
+  --rd-brand-100: #b9b3a9;
+  --rd-brand-400: #55524c;
+  --rd-brand-500: #3c3a36;
+  --rd-brand-900: #0d0d0f;
+  --rd-panel: #111113;
+  --rd-panel-soft: #1d1d20;
+  --rd-panel-fg: #d8d6d1;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
+}
+
+/* --- 03 DISTRICT — the house look: clean urban editorial ------------------ */
+[data-theme="district"] {
+  --rd-ink: #0a0a0b;
+  --rd-ink-soft: #16161a;
+  --rd-bone: #f4f1ea;
+  --rd-sand: #d9cfbe;
+  --rd-clay: #b08b6e;
+  --rd-amber: #e0a04d;
+  --rd-olive: #5b6043;
+  --rd-brand-50: #f6f6f4;
+  --rd-brand-100: #e7e5df;
+  --rd-brand-400: #8a8578;
+  --rd-brand-500: #6b6659;
+  --rd-brand-900: #14140f;
+  --rd-panel: #0a0a0b;
+  --rd-panel-soft: #16161a;
+  --rd-panel-fg: #f4f1ea;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-anton), "Arial Narrow", sans-serif;
+}
+
+/* --- 04 NIGHT SHIFT — dark cinematic, controlled electric glow ------------ */
+[data-theme="nightshift"] {
+  color-scheme: dark;
+  --rd-ink: #e8eaf2;
+  --rd-ink-soft: #d9dcea;
+  --rd-bone: #07080d;
+  --rd-sand: #1b1e2b;
+  --rd-clay: #7c84a3;
+  --rd-amber: #6de0c8;
+  --rd-olive: #8a93b8;
+  --rd-brand-50: #0d0f16;
+  --rd-brand-100: #1e2233;
+  --rd-brand-400: #8b92ad;
+  --rd-brand-500: #aab1cb;
+  --rd-brand-900: #eef0f8;
+  --rd-panel: #0b0d14;
+  --rd-panel-soft: #101321;
+  --rd-panel-fg: #e8eaf2;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
+  --rd-glow: 109, 224, 200;
+}
+
+/* --- 05 ARCHIVE — cream paper, ledger rules, editorial serif -------------- */
+[data-theme="archive"] {
+  --rd-ink: #1c1a16;
+  --rd-ink-soft: #262218;
+  --rd-bone: #efe8da;
+  --rd-sand: #d8cbb2;
+  --rd-clay: #a3805c;
+  --rd-amber: #8a4b2a;
+  --rd-olive: #5c5a41;
+  --rd-brand-50: #f3eee1;
+  --rd-brand-100: #d9cdb6;
+  --rd-brand-400: #847a67;
+  --rd-brand-500: #665d4d;
+  --rd-brand-900: #14120e;
+  --rd-panel: #1c1a16;
+  --rd-panel-soft: #262218;
+  --rd-panel-fg: #efe8da;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-fraunces), Georgia, serif;
+}
+
+/* --- 06 SIGNATURE — ultra-premium minimal, massive whitespace -------------- */
+[data-theme="signature"] {
+  --rd-ink: #141414;
+  --rd-ink-soft: #201f1d;
+  --rd-bone: #fbfaf7;
+  --rd-sand: #e9e4da;
+  --rd-clay: #b0a18e;
+  --rd-amber: #8c8577;
+  --rd-olive: #6f6b60;
+  --rd-brand-50: #f4f2ec;
+  --rd-brand-100: #e7e3d9;
+  --rd-brand-400: #8d887c;
+  --rd-brand-500: #6d685c;
+  --rd-brand-900: #101010;
+  --rd-panel: #141414;
+  --rd-panel-soft: #201f1d;
+  --rd-panel-fg: #fbfaf7;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-fraunces), Georgia, serif;
+}
+
+/* ----------------------------------------------------------------------------
+   2. DARK-ON-LIGHT / LIGHT-ON-DARK UTILITY REMAPS
+   The storefront uses black/… and white/… opacity utilities for muted text,
+   hairlines and fills. They are remapped through the theme ink so they stay
+   legible on dark canvases. For light themes the remap is visually
+   identical (theme ink ≈ black).
+   -------------------------------------------------------------------------- */
+
+[data-theme] .text-black\/15 { color: color-mix(in oklab, var(--rd-ink) 15%, transparent); }
+[data-theme] .text-black\/25 { color: color-mix(in oklab, var(--rd-ink) 25%, transparent); }
+[data-theme] .text-black\/30 { color: color-mix(in oklab, var(--rd-ink) 30%, transparent); }
+[data-theme] .text-black\/35 { color: color-mix(in oklab, var(--rd-ink) 35%, transparent); }
+[data-theme] .text-black\/40 { color: color-mix(in oklab, var(--rd-ink) 40%, transparent); }
+[data-theme] .text-black\/45 { color: color-mix(in oklab, var(--rd-ink) 45%, transparent); }
+[data-theme] .text-black\/50 { color: color-mix(in oklab, var(--rd-ink) 50%, transparent); }
+[data-theme] .text-black\/55 { color: color-mix(in oklab, var(--rd-ink) 55%, transparent); }
+[data-theme] .text-black\/60 { color: color-mix(in oklab, var(--rd-ink) 60%, transparent); }
+[data-theme] .text-black\/70 { color: color-mix(in oklab, var(--rd-ink) 70%, transparent); }
+
+[data-theme] .border-black\/10 { border-color: color-mix(in oklab, var(--rd-ink) 10%, transparent); }
+[data-theme] .border-black\/15 { border-color: color-mix(in oklab, var(--rd-ink) 15%, transparent); }
+[data-theme] .border-black\/25 { border-color: color-mix(in oklab, var(--rd-ink) 25%, transparent); }
+
+[data-theme] .divide-black\/10 > :not(:last-child),
+[data-theme] .divide-black\/10 > :not([hidden]) ~ :not([hidden]) {
+  border-color: color-mix(in oklab, var(--rd-ink) 10%, transparent);
+}
+
+[data-theme] .bg-black\/5 { background-color: color-mix(in oklab, var(--rd-ink) 5%, transparent); }
+[data-theme] .bg-black\/10 { background-color: color-mix(in oklab, var(--rd-ink) 10%, transparent); }
+[data-theme] .bg-black { background-color: var(--rd-ink); }
+
+/* white-based utilities only clash on dark canvases */
+[data-theme="noir"] .text-white,
+[data-theme="nightshift"] .text-white { color: var(--rd-panel-fg); }
+[data-theme="noir"] .bg-white,
+[data-theme="nightshift"] .bg-white { background-color: var(--rd-brand-50); }
+[data-theme="noir"] .bg-white\/90,
+[data-theme="nightshift"] .bg-white\/90 {
+  background-color: color-mix(in oklab, var(--rd-panel) 90%, transparent);
+}
+
+/* default-tailwind amber shade used on the PDP save badge */
+[data-theme="noir"] .text-amber-800,
+[data-theme="nightshift"] .text-amber-800 { color: var(--rd-amber); }
+[data-theme="noir"] .bg-amber.text-ink,
+[data-theme="nightshift"] .bg-amber.text-ink { color: var(--rd-panel); }
+
+/* ----------------------------------------------------------------------------
+   3. DELIBERATE DARK PANELS (hero, marquee, banners, brand story, footer)
+   In dark themes the inverted tokens would flip these panels light; the
+   .rd-dark-panel hook keeps them intentionally dark with light content.
+   -------------------------------------------------------------------------- */
+
+[data-theme="noir"] .rd-dark-panel,
+[data-theme="nightshift"] .rd-dark-panel {
+  background-color: var(--rd-panel);
+}
+[data-theme="noir"] .rd-dark-panel .bg-ink,
+[data-theme="nightshift"] .rd-dark-panel .bg-ink {
+  background-color: var(--rd-panel);
+}
+[data-theme="noir"] .rd-dark-panel .text-bone,
+[data-theme="nightshift"] .rd-dark-panel .text-bone {
+  color: var(--rd-panel-fg);
+}
+[data-theme="noir"] .rd-dark-panel .hover\:text-bone:hover,
+[data-theme="nightshift"] .rd-dark-panel .hover\:text-bone:hover {
+  color: var(--rd-panel-fg);
+}
+[data-theme="noir"] .rd-dark-panel .text-bone\/70,
+[data-theme="nightshift"] .rd-dark-panel .text-bone\/70 {
+  color: color-mix(in oklab, var(--rd-panel-fg) 70%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .text-bone\/50,
+[data-theme="nightshift"] .rd-dark-panel .text-bone\/50 {
+  color: color-mix(in oklab, var(--rd-panel-fg) 50%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .border-bone\/40,
+[data-theme="nightshift"] .rd-dark-panel .border-bone\/40 {
+  border-color: color-mix(in oklab, var(--rd-panel-fg) 40%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .bg-bone,
+[data-theme="nightshift"] .rd-dark-panel .bg-bone {
+  background-color: var(--rd-panel-fg);
+}
+[data-theme="noir"] .rd-dark-panel .bg-bone\/10,
+[data-theme="nightshift"] .rd-dark-panel .bg-bone\/10 {
+  background-color: color-mix(in oklab, var(--rd-panel-fg) 10%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .text-ink,
+[data-theme="nightshift"] .rd-dark-panel .text-ink {
+  color: var(--rd-panel);
+}
+[data-theme="noir"] .rd-dark-panel .border-ink\/10,
+[data-theme="nightshift"] .rd-dark-panel .border-ink\/10 {
+  border-color: color-mix(in oklab, var(--rd-panel-fg) 12%, transparent);
+}
+/* gradient veils over imagery keep their cinematic dark fade */
+[data-theme="noir"] .rd-dark-panel .from-ink\/85,
+[data-theme="nightshift"] .rd-dark-panel .from-ink\/85 {
+  --tw-gradient-from: color-mix(in oklab, var(--rd-panel) 85%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .via-ink\/40,
+[data-theme="nightshift"] .rd-dark-panel .via-ink\/40 {
+  --tw-gradient-via: color-mix(in oklab, var(--rd-panel) 40%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .via-ink\/10,
+[data-theme="nightshift"] .rd-dark-panel .via-ink\/10 {
+  --tw-gradient-via: color-mix(in oklab, var(--rd-panel) 10%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .to-ink\/30,
+[data-theme="nightshift"] .rd-dark-panel .to-ink\/30 {
+  --tw-gradient-to: color-mix(in oklab, var(--rd-panel) 30%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .from-ink\/60,
+[data-theme="nightshift"] .rd-dark-panel .from-ink\/60 {
+  --tw-gradient-from: color-mix(in oklab, var(--rd-panel) 60%, transparent);
+}
+[data-theme="noir"] .rd-dark-panel .from-ink,
+[data-theme="nightshift"] .rd-dark-panel .from-ink {
+  --tw-gradient-from: var(--rd-panel);
+}
+
+/* ----------------------------------------------------------------------------
+   4. SHARED THEME HOOKS
+   -------------------------------------------------------------------------- */
+
+/* numbered product-card index: hidden unless a theme opts in */
+.rd-card { position: relative; }
+.rd-card-index { display: none; }
+
+/* hero hooks */
+.rd-hero-inner { position: relative; }
+
+/* navbar transparent-over-hero state: dark-image heroes need light text … */
+[data-theme="noir"] .rd-nav-over-hero,
+[data-theme="nightshift"] .rd-nav-over-hero,
+[data-theme="concrete"] .rd-nav-over-hero,
+[data-theme="district"] .rd-nav-over-hero {
+  color: #f4f1ea;
+}
+/* … while ARCHIVE / SIGNATURE open on cream canvases and need ink text */
+[data-theme="archive"] .rd-nav-over-hero,
+[data-theme="signature"] .rd-nav-over-hero {
+  color: var(--rd-ink);
+}
+
+/* admin live-preview banner (storefront only, never persisted) */
+.rd-preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  block-size: 2.25rem;
+  padding-inline: 1rem;
+  background: #111113;
+  color: #f4f1ea;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.rd-preview-bar a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+/* the fixed navbar and pages that pad under it account for the banner */
+.rd-has-preview header.fixed { top: 2.25rem; }
+.rd-has-preview .rd-needs-offset { padding-block-start: 6.25rem; }
+
+/* ----------------------------------------------------------------------------
+   5. PER-THEME STRUCTURAL DESIGN
+   -------------------------------------------------------------------------- */
+
+/* ============================ 01 NOIR DEPT ================================ */
+[data-theme="noir"] .rd-hero--cinematic .rd-hero-inner {
+  padding-block-end: clamp(4rem, 12vh, 9rem);
+}
+[data-theme="noir"] .rd-hero--cinematic h1 {
+  font-size: clamp(3.25rem, 11vw, 10.5rem);
+  line-height: 0.86;
+  letter-spacing: -0.01em;
+  max-width: none;
+}
+[data-theme="noir"] .rd-hero--cinematic .rd-hero-eyebrow {
+  color: var(--rd-amber);
+  letter-spacing: 0.5em;
+}
+[data-theme="noir"] .rd-hero--cinematic .rd-hero-eyebrow::before {
+  content: "";
+  display: inline-block;
+  inline-size: 3rem;
+  block-size: 1px;
+  background: var(--rd-amber);
+  margin-inline-end: 1rem;
+  vertical-align: middle;
+}
+[data-theme="noir"] .rd-hero--cinematic .rd-hero-veil-a {
+  background: linear-gradient(to top, rgba(10, 10, 11, 0.94), rgba(10, 10, 11, 0.25) 55%, rgba(10, 10, 11, 0.45));
+}
+/* editorial section rhythm: oversized headings, generous leading */
+[data-theme="noir"] h2.font-display {
+  font-size: clamp(2.25rem, 5.5vw, 4.25rem);
+}
+[data-theme="noir"] .rd-card .rd-card-img { border-radius: 6px; }
+[data-theme="noir"] .rd-card .rd-card-img img { transition: transform 1.1s cubic-bezier(0.16, 1, 0.3, 1); }
+[data-theme="noir"] .rd-card h3 { letter-spacing: 0.02em; }
+[data-theme="noir"] .animate-fade-up { animation-duration: 1s; }
+
+/* ============================ 02 RAW CONCRETE ============================= */
+[data-theme="concrete"] .font-display {
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+[data-theme="concrete"] .rd-hero--brutalist {
+  border-block-end: 2px solid var(--rd-ink);
+}
+[data-theme="concrete"] .rd-hero--brutalist .rd-hero-inner {
+  border-inline-start: 2px solid rgba(216, 214, 209, 0.35);
+  padding-inline-start: clamp(1rem, 4vw, 3rem);
+}
+[data-theme="concrete"] .rd-hero--brutalist h1 {
+  font-size: clamp(3rem, 10vw, 9rem);
+  line-height: 0.92;
+}
+[data-theme="concrete"] .rd-hero--brutalist .rd-hero-eyebrow {
+  color: var(--rd-amber);
+  letter-spacing: 0.4em;
+}
+[data-theme="concrete"] .rd-hero--brutalist .rd-hero-eyebrow::after {
+  content: " / RD";
+  opacity: 0.6;
+}
+/* cards: hard frames, no radius, monochrome imagery, oversized index */
+[data-theme="concrete"] .rd-card .rd-card-img {
+  border-radius: 0;
+  border: 2px solid var(--rd-ink);
+}
+[data-theme="concrete"] .rd-card .rd-card-img img { filter: grayscale(1) contrast(1.06); }
+[data-theme="concrete"] .rd-card:hover .rd-card-img img { filter: grayscale(0.1) contrast(1.02); }
+[data-theme="concrete"] .rd-card-index {
+  display: block;
+  position: absolute;
+  inset-inline-end: 0.5rem;
+  top: 0.5rem;
+  z-index: 10;
+  font-family: var(--rd-font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  background: var(--rd-bone);
+  color: var(--rd-ink);
+  border: 2px solid var(--rd-ink);
+  padding: 0.15rem 0.5rem;
+}
+[data-theme="concrete"] .rd-card h3 {
+  font-family: var(--rd-font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.01em;
+}
+[data-theme="concrete"] section { border-color: var(--rd-ink); }
+[data-theme="concrete"] .rounded-2xl { border-radius: 0.375rem; }
+[data-theme="concrete"] .animate-fade-up { animation-duration: 0.35s; animation-timing-function: steps(6, end); }
+
+/* ============================ 03 DISTRICT ================================= */
+/* house look — token defaults already reproduce it exactly */
+
+/* ============================ 04 NIGHT SHIFT ============================== */
+[data-theme="nightshift"] .font-display { letter-spacing: -0.015em; }
+
+[data-theme="nightshift"] .rd-hero--immersive {
+  background:
+    radial-gradient(60% 55% at 70% 20%, rgba(var(--rd-glow), 0.16), transparent 70%),
+    radial-gradient(50% 45% at 20% 80%, rgba(var(--rd-glow), 0.08), transparent 70%),
+    var(--rd-panel);
+}
+[data-theme="nightshift"] .rd-hero--immersive .rd-hero-eyebrow {
+  color: rgb(var(--rd-glow));
+  letter-spacing: 0.45em;
+}
+[data-theme="nightshift"] .rd-hero--immersive h1 {
+  font-size: clamp(3rem, 9.5vw, 8.5rem);
+  line-height: 0.9;
+  text-shadow: 0 0 60px rgba(var(--rd-glow), 0.22);
+}
+/* controlled glow on primary CTAs */
+[data-theme="nightshift"] .rd-hero .bg-bone,
+[data-theme="nightshift"] .rd-pdp .rd-atc {
+  box-shadow: 0 0 0 1px rgba(var(--rd-glow), 0.25), 0 10px 34px -12px rgba(var(--rd-glow), 0.45);
+}
+[data-theme="nightshift"] .rd-card .rd-card-img {
+  border-radius: 10px;
+  border: 1px solid var(--rd-brand-100);
+  background: var(--rd-brand-50);
+}
+[data-theme="nightshift"] .rd-card:hover .rd-card-img {
+  border-color: rgba(var(--rd-glow), 0.45);
+  box-shadow: 0 18px 44px -18px rgba(var(--rd-glow), 0.35);
+}
+[data-theme="nightshift"] .rd-card h3 { color: var(--rd-ink); }
+[data-theme="nightshift"] .animate-fade-up { animation-duration: 0.85s; }
+
+/* ============================ 05 ARCHIVE ================================== */
+[data-theme="archive"] .font-display {
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+/* catalog titles read as editorial serif, not shouted uppercase */
+[data-theme="archive"] h1.font-display.uppercase,
+[data-theme="archive"] h2.font-display.uppercase,
+[data-theme="archive"] h3.font-display.uppercase {
+  text-transform: none;
+  letter-spacing: -0.015em;
+}
+[data-theme="archive"] .rd-hero--catalog {
+  background: var(--rd-bone);
+  color: var(--rd-ink);
+}
+[data-theme="archive"] .rd-hero--catalog .rd-hero-veil-a,
+[data-theme="archive"] .rd-hero--catalog .rd-hero-veil-b {
+  background: linear-gradient(to top, rgba(239, 232, 218, 0.96), rgba(239, 232, 218, 0.55) 45%, rgba(239, 232, 218, 0.2));
+}
+[data-theme="archive"] .rd-hero--catalog img { filter: sepia(0.22) contrast(0.94) brightness(1.02); }
+[data-theme="archive"] .rd-hero--catalog h1 {
+  font-size: clamp(2.75rem, 8vw, 7rem);
+  line-height: 0.98;
+  color: var(--rd-ink);
+}
+[data-theme="archive"] .rd-hero--catalog .rd-hero-eyebrow {
+  color: var(--rd-amber);
+  letter-spacing: 0.35em;
+}
+[data-theme="archive"] .rd-hero--catalog .rd-hero-eyebrow::before {
+  content: "№ ";
+}
+[data-theme="archive"] .rd-hero--catalog .text-bone\/70 { color: color-mix(in oklab, var(--rd-ink) 70%, transparent); }
+[data-theme="archive"] .rd-hero--catalog .text-bone { color: var(--rd-ink); }
+[data-theme="archive"] .rd-hero--catalog .bg-bone { background-color: var(--rd-ink); }
+[data-theme="archive"] .rd-hero--catalog .text-ink { color: var(--rd-bone); }
+[data-theme="archive"] .rd-hero--catalog .border-bone\/40 { border-color: color-mix(in oklab, var(--rd-ink) 40%, transparent); }
+[data-theme="archive"] .rd-hero--catalog .bg-bone\/10 { background-color: color-mix(in oklab, var(--rd-ink) 10%, transparent); }
+
+/* cards: cream matte frames + ledger numbering */
+[data-theme="archive"] .rd-card .rd-card-img {
+  border-radius: 2px;
+  border: 1px solid color-mix(in oklab, var(--rd-ink) 55%, transparent);
+  padding: 8px;
+  background: var(--rd-brand-50);
+}
+[data-theme="archive"] .rd-card .rd-card-img img { border-radius: 0; }
+[data-theme="archive"] .rd-card-index {
+  display: block;
+  position: absolute;
+  inset-inline-start: 1rem;
+  inset-block-end: 1rem;
+  z-index: 10;
+  font-family: var(--rd-font-display);
+  font-size: 0.72rem;
+  font-style: italic;
+  letter-spacing: 0.08em;
+  background: var(--rd-brand-50);
+  color: var(--rd-brand-500);
+  border: 1px solid color-mix(in oklab, var(--rd-ink) 40%, transparent);
+  padding: 0.1rem 0.5rem;
+}
+[data-theme="archive"] .rd-card-index::before { content: "No. "; }
+[data-theme="archive"] .rd-card h3 {
+  font-family: var(--rd-font-display);
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+[data-theme="archive"] .rd-card .rd-card-meta { border-block-start: 1px solid color-mix(in oklab, var(--rd-ink) 18%, transparent); padding-block-start: 0.6rem; }
+[data-theme="archive"] .animate-fade-up { animation-duration: 0.8s; }
+
+/* ============================ 06 SIGNATURE ================================ */
+[data-theme="signature"] .font-display {
+  font-weight: 450;
+  letter-spacing: -0.02em;
+}
+[data-theme="signature"] h1.font-display.uppercase,
+[data-theme="signature"] h2.font-display.uppercase {
+  text-transform: none;
+  letter-spacing: -0.02em;
+}
+/* expanded editorial spacing — except the marquee strip (rd-dark-panel) */
+[data-theme="signature"] section[class*="py-"]:not(.rd-dark-panel) {
+  padding-block: clamp(5rem, 10vw, 9rem);
+}
+[data-theme="signature"] .rd-hero--minimal {
+  background: var(--rd-bone);
+  color: var(--rd-ink);
+  min-height: 88svh;
+}
+[data-theme="signature"] .rd-hero--minimal .rd-hero-veil-a,
+[data-theme="signature"] .rd-hero--minimal .rd-hero-veil-b {
+  background: linear-gradient(to top, rgba(251, 250, 247, 0.97), rgba(251, 250, 247, 0.6) 45%, rgba(251, 250, 247, 0.25));
+}
+[data-theme="signature"] .rd-hero--minimal img { filter: saturate(0.85) contrast(0.97); }
+[data-theme="signature"] .rd-hero--minimal .rd-hero-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding-block-end: clamp(4rem, 10vh, 8rem);
+}
+[data-theme="signature"] .rd-hero--minimal h1 {
+  font-size: clamp(2.5rem, 7vw, 6rem);
+  line-height: 1.02;
+  color: var(--rd-ink);
+  max-width: 22ch;
+}
+[data-theme="signature"] .rd-hero--minimal .rd-hero-eyebrow {
+  letter-spacing: 0.6em;
+  color: color-mix(in oklab, var(--rd-ink) 55%, transparent);
+}
+[data-theme="signature"] .rd-hero--minimal .text-bone\/70 { color: color-mix(in oklab, var(--rd-ink) 65%, transparent); }
+[data-theme="signature"] .rd-hero--minimal .text-bone { color: var(--rd-ink); }
+[data-theme="signature"] .rd-hero--minimal .bg-bone { background-color: var(--rd-ink); }
+[data-theme="signature"] .rd-hero--minimal .text-ink { color: var(--rd-bone); }
+[data-theme="signature"] .rd-hero--minimal .border-bone\/40 { border-color: color-mix(in oklab, var(--rd-ink) 40%, transparent); }
+[data-theme="signature"] .rd-hero--minimal .bg-bone\/10 { background-color: color-mix(in oklab, var(--rd-ink) 10%, transparent); }
+/* cards: whisper captions, hairlines only */
+[data-theme="signature"] .rd-card .rd-card-img {
+  border-radius: 2px;
+  background: transparent;
+}
+[data-theme="signature"] .rd-card .rd-card-img img { transition: opacity 0.6s ease, transform 0.9s cubic-bezier(0.16, 1, 0.3, 1); }
+[data-theme="signature"] .rd-card:hover .rd-card-img img { opacity: 0.92; }
+[data-theme="signature"] .rd-card h3 {
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+[data-theme="signature"] .rd-card .rd-card-meta { letter-spacing: 0.06em; }
+[data-theme="signature"] .animate-fade-up { animation-duration: 1.1s; }
+
+/* ----------------------------------------------------------------------------
+   6. PDP STRUCTURAL VARIANTS (hooks: .rd-pdp, .rd-pdp-grid, .rd-pdp-info)
+   -------------------------------------------------------------------------- */
+
+/* NOIR — cinematic: oversized title, gold rule, sticky buy column */
+[data-theme="noir"] .rd-pdp h1 { font-size: clamp(2.5rem, 6vw, 4.5rem); line-height: 0.92; }
+[data-theme="noir"] .rd-pdp .rd-pdp-kicker { color: var(--rd-amber); letter-spacing: 0.4em; }
+[data-theme="noir"] .rd-pdp .rd-pdp-info { position: sticky; top: 6rem; align-self: start; }
+[data-theme="noir"] .rd-pdp .rd-gallery-frame { border-radius: 8px; }
+
+/* CONCRETE — technical spec sheet: rules + numbered blocks */
+[data-theme="concrete"] .rd-pdp .rd-pdp-grid { border-block-start: 2px solid var(--rd-ink); padding-block-start: 2rem; }
+[data-theme="concrete"] .rd-pdp h1 {
+  font-family: var(--rd-font-display);
+  font-size: clamp(2.25rem, 5vw, 4rem);
+  letter-spacing: -0.02em;
+}
+[data-theme="concrete"] .rd-pdp .rd-pdp-kicker { color: var(--rd-amber); letter-spacing: 0.35em; }
+[data-theme="concrete"] .rd-pdp .rd-pdp-kicker::after { content: " — SPEC SHEET"; }
+[data-theme="concrete"] .rd-pdp .rd-gallery-frame { border-radius: 0; border: 2px solid var(--rd-ink); }
+[data-theme="concrete"] .rd-pdp .rd-gallery-frame img { filter: grayscale(0.6) contrast(1.05); }
+
+/* DISTRICT — magazine editorial (the current composition) */
+
+/* NIGHT SHIFT — immersive dark stage */
+[data-theme="nightshift"] .rd-pdp h1 {
+  font-family: var(--rd-font-display);
+  font-size: clamp(2.5rem, 6vw, 4.25rem);
+  letter-spacing: -0.015em;
+}
+[data-theme="nightshift"] .rd-pdp .rd-pdp-kicker { color: rgb(var(--rd-glow)); letter-spacing: 0.4em; }
+[data-theme="nightshift"] .rd-pdp .rd-gallery-frame { border-radius: 10px; border: 1px solid var(--rd-brand-100); }
+[data-theme="nightshift"] .rd-pdp .rd-pdp-info { position: sticky; top: 6rem; align-self: start; }
+
+/* ARCHIVE — catalog plate on cream */
+[data-theme="archive"] .rd-pdp h1 { font-size: clamp(2.25rem, 5vw, 3.75rem); }
+[data-theme="archive"] .rd-pdp .rd-pdp-kicker { font-style: italic; letter-spacing: 0.2em; color: var(--rd-amber); }
+[data-theme="archive"] .rd-pdp .rd-gallery-frame {
+  border-radius: 2px;
+  border: 1px solid color-mix(in oklab, var(--rd-ink) 55%, transparent);
+  padding: 10px;
+  background: var(--rd-brand-50);
+}
+[data-theme="archive"] .rd-pdp .rd-gallery-frame img { filter: sepia(0.16) contrast(0.95); }
+
+/* SIGNATURE — luxury: stacked single column, vast whitespace */
+@media (min-width: 1024px) {
+  [data-theme="signature"] .rd-pdp .rd-pdp-grid {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 60rem;
+    row-gap: 4rem;
+  }
+  [data-theme="signature"] .rd-pdp .rd-pdp-info { max-width: 34rem; margin-inline: auto; }
+}
+[data-theme="signature"] .rd-pdp h1 { font-size: clamp(2.25rem, 4.5vw, 3.5rem); line-height: 1.05; }
+[data-theme="signature"] .rd-pdp .rd-pdp-kicker { letter-spacing: 0.5em; }
+
+/* ----------------------------------------------------------------------------
+   7. CHROME ACCENTS (nav / footer / marquee / buttons)
+   -------------------------------------------------------------------------- */
+
+[data-theme="noir"] header nav { letter-spacing: 0.06em; }
+[data-theme="concrete"] header { border-block-end: 2px solid transparent; }
+[data-theme="concrete"] header:not(.bg-transparent) { border-block-end-color: var(--rd-ink); }
+[data-theme="nightshift"] header:not(.bg-transparent) { border-block-end-color: rgba(var(--rd-glow), 0.18); }
+[data-theme="archive"] footer.rd-dark-panel { border-block-start: 1px solid color-mix(in oklab, var(--rd-panel-fg) 25%, transparent); }
+[data-theme="signature"] header nav { letter-spacing: 0.12em; text-transform: uppercase; font-size: 0.72rem; }
+
+/* primary CTAs: squared for brutalist, airy for luxury */
+[data-theme="concrete"] .rd-cta { border-radius: 0.125rem; }
+[data-theme="signature"] .rd-cta { border-radius: 9999px; letter-spacing: 0.18em; }
+[data-theme="noir"] .rd-cta { border-radius: 0.125rem; letter-spacing: 0.22em; }
+
+/* body background follows the theme (the data-theme wrapper sits inside
+   <body>; :has keeps overscroll/rubber-band areas seamless) */
+body:has([data-theme="noir"]) { background-color: #0a0a0b; }
+body:has([data-theme="nightshift"]) { background-color: #07080d; }
+body:has([data-theme="concrete"]) { background-color: #d8d6d1; }
+body:has([data-theme="archive"]) { background-color: #efe8da; }
+body:has([data-theme="signature"]) { background-color: #fbfaf7; }

@@ -1,26 +1,55 @@
 @import "tailwindcss";
 
-@theme {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-anton), "Arial Narrow", sans-serif;
+/*
+ * Themeable design tokens.
+ *
+ * Every Tailwind palette utility (bg-bone, text-ink, border-brand-100, …)
+ * resolves through an --rd-* CSS variable defined in theme.css, scoped by
+ * [data-theme="…"]. Switching the storefront theme is therefore pure CSS —
+ * no component rewrites, no extra queries, and the admin panel (which has
+ * no data-theme attribute) keeps the exact house look via the :root
+ * defaults below.
+ */
+@theme inline {
+  --font-sans: var(--rd-font-sans);
+  --font-display: var(--rd-font-display);
 
-  --color-ink: #0a0a0b;
-  --color-ink-soft: #16161a;
-  --color-bone: #f4f1ea;
-  --color-sand: #d9cfbe;
-  --color-clay: #b08b6e;
-  --color-amber: #e0a04d;
-  --color-olive: #5b6043;
+  --color-ink: var(--rd-ink);
+  --color-ink-soft: var(--rd-ink-soft);
+  --color-bone: var(--rd-bone);
+  --color-sand: var(--rd-sand);
+  --color-clay: var(--rd-clay);
+  --color-amber: var(--rd-amber);
+  --color-olive: var(--rd-olive);
 
-  --color-brand-50: #f6f6f4;
-  --color-brand-100: #e7e5df;
-  --color-brand-400: #8a8578;
-  --color-brand-500: #6b6659;
-  --color-brand-900: #14140f;
+  --color-brand-50: var(--rd-brand-50);
+  --color-brand-100: var(--rd-brand-100);
+  --color-brand-400: var(--rd-brand-400);
+  --color-brand-500: var(--rd-brand-500);
+  --color-brand-900: var(--rd-brand-900);
 }
 
 :root {
   color-scheme: light;
+  /* District (house look) defaults — identical to the pre-theme palette so
+     the default storefront and the admin panel render exactly as before. */
+  --rd-ink: #0a0a0b;
+  --rd-ink-soft: #16161a;
+  --rd-bone: #f4f1ea;
+  --rd-sand: #d9cfbe;
+  --rd-clay: #b08b6e;
+  --rd-amber: #e0a04d;
+  --rd-olive: #5b6043;
+  --rd-brand-50: #f6f6f4;
+  --rd-brand-100: #e7e5df;
+  --rd-brand-400: #8a8578;
+  --rd-brand-500: #6b6659;
+  --rd-brand-900: #14140f;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-anton), "Arial Narrow", sans-serif;
+  /* deliberate dark panels (hero, marquee, footer, brand story) */
+  --rd-panel: #0a0a0b;
+  --rd-panel-soft: #16161a;
 }
 
 html {
@@ -28,12 +57,12 @@ html {
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--rd-font-sans);
   -webkit-font-smoothing: antialiased;
 }
 
 .font-display {
-  font-family: var(--font-display);
+  font-family: var(--rd-font-display);
   letter-spacing: 0.01em;
 }
 

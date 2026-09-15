@@ -43,10 +43,15 @@ export function ProductCard({
   return (
     <Link
       href={`/products/${product.slug}`}
-      className="group block animate-fade-up"
+      className="rd-card group block animate-fade-up"
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
     >
-      <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-100">
+      <div className="rd-card-img relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-100">
+        {/* theme index chip — markup always present, visibility is decided
+            by the active theme's CSS (RAW CONCRETE / ARCHIVE show it) */}
+        <span className="rd-card-index" aria-hidden="true">
+          {String((index % 99) + 1).padStart(2, "0")}
+        </span>
         {/* base image — server-optimized (AVIF/WebP + responsive srcset),
             sized for the card instead of the full-resolution original */}
         {product.images[0] ? (
@@ -107,7 +112,7 @@ export function ProductCard({
         </div>
       </div>
 
-      <div className="mt-3 px-0.5">
+      <div className="rd-card-meta mt-3 px-0.5">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[11px] font-medium uppercase tracking-wider text-black/40">
             {product.category}
