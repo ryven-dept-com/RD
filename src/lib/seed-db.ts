@@ -690,15 +690,49 @@ const WILAYAS: [number, string, number | null, number | null][] = [
 /**
  * Security hardening: server-side ownership of admin push devices.
  *
- * Adds `admin_id` (the admin account that registered the device). Additive
- * and idempotent; existing databases get a ONE-TIME backfill (marker-gated)
- * that attributes pre-existing rows to the first admin account — safe
- * because those rows could only ever have been created through the
- * authenticated + CSRF-protected /api/admin/devices route. New registrations
- * always stamp the live session's admin id server-side.
+ * Self-contained, idempotent schema guarantee for the whole push subsystem
+ * (device registry + notification log + `admin_id` ownership). Every consumer
+ * (bootstrap AND the /api/admin/devices route AND the new-order fan-out)
+ * calls this first, so a production database that never ran the global
+ * bootstrap — or where an unrelated earlier migration statement failed —
+ * still self-heals on the first push-related request.
+ *
+ * `admin_id` stores the admin account that registered the device. New
+ * registrations always stamp the live session's admin id server-side.
+ * Existing databases get a ONE-TIME backfill (marker-gated) attributing
+ * pre-existing rows to the first admin account — safe because those rows
+ * could only ever have been created through the authenticated +
+ * CSRF-protected /api/admin/devices route.
  */
 const ADMIN_DEVICE_OWNERSHIP_STATEMENTS = [
+  // Full definition (incl. admin_id) for databases creating the table now.
+  `CREATE TABLE IF NOT EXISTS "admin_devices" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "provider" text DEFAULT 'fcm' NOT NULL,
+    "token" text NOT NULL,
+    "device_name" text DEFAULT '' NOT NULL,
+    "admin_id" integer REFERENCES "admin_users"("id"),
+    "created_at" timestamp DEFAULT now() NOT NULL,
+    "last_seen_at" timestamp DEFAULT now() NOT NULL,
+    CONSTRAINT "admin_devices_token_unique" UNIQUE("token")
+  )`,
+  // Legacy tables created before ownership existed gain the column.
   `ALTER TABLE "admin_devices" ADD COLUMN IF NOT EXISTS "admin_id" integer REFERENCES "admin_users"("id")`,
+  `CREATE INDEX IF NOT EXISTS "admin_devices_admin_id_idx" ON "admin_devices" ("admin_id")`,
+  // Notification log (dedup by (order, type) makes duplicates impossible).
+  `CREATE TABLE IF NOT EXISTS "admin_notifications" (
+    "id" serial PRIMARY KEY NOT NULL,
+    "order_id" integer REFERENCES "orders"("id") ON DELETE cascade,
+    "order_number" text DEFAULT '' NOT NULL,
+    "type" text DEFAULT 'new_order' NOT NULL,
+    "title" text DEFAULT '' NOT NULL,
+    "body" text DEFAULT '' NOT NULL,
+    "created_at" timestamp DEFAULT now() NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "admin_notifications_order_type_uniq"
+    ON "admin_notifications" ("order_id", "type")`,
+  `CREATE INDEX IF NOT EXISTS "admin_notifications_created_at_idx"
+    ON "admin_notifications" ("created_at")`,
 ];
 
 export async function ensureAdminDeviceOwnership(db: SeedDb): Promise<void> {

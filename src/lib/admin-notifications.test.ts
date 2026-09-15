@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   adminDevices,
@@ -272,5 +273,30 @@ describe("new-order notifications", () => {
     expect(history[0].orderNumber).toBe(b.orderNumber);
     const ids = history.map((n) => n.id);
     expect([...ids].sort((x, y) => y - x)).toEqual(ids);
+  });
+});
+
+describe("push schema self-heal (production incident regression)", () => {
+  it("recreates a missing admin_devices table with ownership + indexes", async () => {
+    // Simulate the production incident: the table simply does not exist.
+    await db.execute(sql`DROP TABLE IF EXISTS "admin_devices" CASCADE`);
+
+    // The route/fan-out entrypoint must heal it before any read/write.
+    const { ensureAdminDeviceOwnership } = await import("./seed-db");
+    await ensureAdminDeviceOwnership(db);
+
+    const dev = await registerAdminDevice(
+      { provider: "fcm", token: "healed-device-token-0000000099", deviceName: "Healed" },
+      ADMIN_ID,
+    );
+    expect(dev.adminId).toBe(ADMIN_ID);
+    const recipients = await listActiveAdminPushDevices();
+    expect(
+      recipients.some((r) => r.token === "healed-device-token-0000000099"),
+    ).toBe(true);
+
+    // Idempotent: running it again must not fail.
+    await ensureAdminDeviceOwnership(db);
+    expect(await listAdminDevices().then((d) => d.length)).toBeGreaterThan(0);
   });
 });

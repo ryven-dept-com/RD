@@ -1,4 +1,6 @@
 import { verifyRequest } from "@/lib/admin-auth";
+import { db } from "@/db";
+import { ensureAdminDeviceOwnership } from "@/lib/seed-db";
 import {
   listAdminDevices,
   registerAdminDevice,
@@ -6,6 +8,15 @@ import {
 } from "@/lib/admin-notifications";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Idempotent schema self-heal: even on a production database where the
+ * global bootstrap never created the push tables, the first call to this
+ * (authenticated) route migrates it before any read/write happens.
+ */
+async function ensurePushSchema(): Promise<void> {
+  await ensureAdminDeviceOwnership(db);
+}
 
 /**
  * Admin device registry for the private mobile admin app.
@@ -23,6 +34,7 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   try {
+    await ensurePushSchema();
     const devices = await listAdminDevices();
     return Response.json({ ok: true, devices });
   } catch (err) {
@@ -41,6 +53,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     // Ownership comes EXCLUSIVELY from the verified server-side session —
     // any client-supplied id/role/user/account field is never read.
+    await ensurePushSchema();
     const device = await registerAdminDevice(
       {
         provider: body.provider,
@@ -75,6 +88,7 @@ export async function DELETE(request: Request) {
     if (!Number.isFinite(id) || id <= 0 || Math.floor(id) !== id) {
       return Response.json({ ok: false, error: "Invalid id" }, { status: 400 });
     }
+    await ensurePushSchema();
     const removed = await unregisterAdminDevice(id);
     if (!removed) {
       return Response.json({ ok: false, error: "Device not found" }, { status: 404 });

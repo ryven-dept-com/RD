@@ -245,6 +245,11 @@ export type NotifyResult = {
  */
 export async function notifyAdminNewOrder(order: Order): Promise<NotifyResult> {
   try {
+    // Self-heal the push tables even if the global bootstrap never ran on
+    // this database (defensive: a missing table must never break checkout).
+    const { ensureAdminDeviceOwnership } = await import("@/lib/seed-db");
+    await ensureAdminDeviceOwnership(db);
+
     const payload = buildNewOrderPayload(order);
 
     // Dedup-safe insert: conflict (same order, same type) → no row returned.
