@@ -26,6 +26,7 @@ const PREVIEW_STYLE: Record<
   archive: { font: "var(--font-fraunces)", transform: "none", tracking: "-0.01em", sample: "Archive" },
   signature: { font: "var(--font-fraunces)", transform: "none", tracking: "0.12em", sample: "Signature" },
   seventh: { font: "var(--font-archivo-black)", transform: "uppercase", tracking: "0", sample: "BLOCK 7" },
+  atelier: { font: "var(--font-syne)", transform: "uppercase", tracking: "-0.01em", sample: "Atelier" },
 };
 
 /** Pure-CSS mini storefront used as the large visual preview on each card. */

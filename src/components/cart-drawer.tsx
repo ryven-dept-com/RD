@@ -72,6 +72,13 @@ export function CartDrawer() {
       thumb: "rounded-none border-2 border-ink",
       qty: "rounded-none border-2 border-ink",
     },
+    atelier: {
+      panel: "border-s border-black/10",
+      head: "font-display uppercase tracking-tight",
+      rows: "divide-y divide-black/10",
+      thumb: "rounded-none border border-black/15",
+      qty: "rounded-full border border-black/15",
+    },
   }[theme] ?? {
     panel: "",
     head: "font-display uppercase tracking-wide",

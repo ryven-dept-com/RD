@@ -59,6 +59,12 @@ const GALLERY_THEME = {
     thumbBtn: "rounded-none border-2 border-ink",
     main: "rounded-none",
   },
+  atelier: {
+    root: "flex flex-col gap-3",
+    thumbs: "order-last lg:max-h-none lg:flex-row lg:overflow-x-auto lg:overflow-y-visible",
+    thumbBtn: "rounded-none border border-black/15",
+    main: "rounded-none",
+  },
 } as const;
 
 export function ProductGallery({

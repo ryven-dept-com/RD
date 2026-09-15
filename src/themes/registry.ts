@@ -3,7 +3,7 @@ import type { ThemeDefinition, ThemeId } from "./types";
 import { isThemeId } from "./types";
 
 /**
- * Theme registry — the six production-ready storefront art directions.
+ * Theme registry — the eight production-ready storefront art directions.
  * Adding a theme later = one entry here + one CSS block + variant hooks;
  * nothing else in the application changes.
  */
@@ -91,6 +91,18 @@ export const THEMES: ThemeDefinition[] = [
     card: "sticker",
     pdp: "drop",
     swatch: { bg: "#f2efe6", surface: "#ffffff", fg: "#101014", accent: "#1d3fd6" },
+  },
+  {
+    id: "atelier",
+    name: "ATELIER",
+    tagline: "Editorial streetwear lookbook",
+    description:
+      "A fashion-editorial storefront: full-bleed campaign photography, gallery-white canvas, art-fashion display type with trailing-dot headings, hairline rules, pill CTAs and scroll-snap product rails. Image-led, generously spaced, magazine-calm.",
+    tags: ["editorial", "lookbook", "image-led", "fashion", "hairlines"],
+    hero: "lookbook",
+    card: "lookbook",
+    pdp: "lookbook",
+    swatch: { bg: "#f6f4ef", surface: "#ece9e1", fg: "#171512", accent: "#37503b" },
   },
 ];
 

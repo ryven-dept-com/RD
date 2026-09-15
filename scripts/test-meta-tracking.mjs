@@ -3672,7 +3672,7 @@ async function main() {
     const list = await (await jfetch(`${BASE}/api/admin/themes`, { headers: tHeaders })).json();
     check(
       "E. admin sees 7 distinct production themes",
-      list.ok && list.themes.length === 7 && new Set(list.themes.map((t) => t.id)).size === 7,
+      list.ok && list.themes.length === 8 && new Set(list.themes.map((t) => t.id)).size === 8,
     );
     check("F. active theme reported", typeof list.activeTheme === "string" && list.activeTheme.length > 0);
 
@@ -3857,6 +3857,41 @@ async function main() {
         pdpSeventh.includes("rd-pdp--drop") &&
         pdpSeventh.includes('property="og:title"'),
     );
+
+    // eighth storefront (ATELIER) exists end to end
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "atelier" }),
+    });
+    const homeAtelier = await (await jfetch(`${BASE}/`)).text();
+    const pdpAtelier = await (await jfetch(`${BASE}/products/apex-low-sneaker-bone`)).text();
+    check(
+      "L2. eighth storefront (ATELIER) renders home + PDP",
+      homeAtelier.includes('data-theme="atelier"') &&
+        homeAtelier.includes("atelier-home") &&
+        homeAtelier.includes("at-card") &&
+        pdpAtelier.includes("rd-pdp--lookbook") &&
+        pdpAtelier.includes('property="og:title"'),
+    );
+    // ATELIER in Arabic is genuine RTL
+    const homeAtelierAr = await (await jfetch(`${BASE}/`, { headers: { cookie: "rd-locale=ar" } })).text();
+    check(
+      "L3. ATELIER renders RTL in Arabic",
+      /<html[^>]*lang="ar"[^>]*dir="rtl"/.test(homeAtelierAr) && homeAtelierAr.includes('data-theme="atelier"'),
+    );
+    // ATELIER honors preview + customization like every other theme
+    const custAtelier = await jfetch(`${BASE}/api/admin/themes/customizations`, {
+      method: "PUT", headers: tHeaders,
+      body: JSON.stringify({ themeId: "atelier", customization: { colors: { accent: "#7a1f2b" }, fonts: { display: "bebas-neue" } } }),
+    });
+    check("L4. ATELIER customization saves", custAtelier.status === 200);
+    const homeAtelierCustom = await (await jfetch(`${BASE}/`)).text();
+    check(
+      "L5. ATELIER customization renders (accent + font override)",
+      homeAtelierCustom.includes("#7a1f2b") || homeAtelierCustom.includes("122, 31, 43"),
+    );
+    await jfetch(`${BASE}/api/admin/themes/customizations`, {
+      method: "DELETE", headers: tHeaders, body: JSON.stringify({ themeId: "atelier" }),
+    });
 
     // restore district + clean state
     await jfetch(`${BASE}/api/admin/themes/activate`, {

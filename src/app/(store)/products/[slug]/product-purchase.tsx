@@ -178,6 +178,7 @@ export function ProductPurchase(props: PurchaseProps) {
     archive: { chip: "rounded-full", size: "rounded-none", qty: "rounded-full", cta: "rounded-full" },
     signature: { chip: "rounded-full", size: "rounded-full", qty: "rounded-full", cta: "rounded-full" },
     seventh: { chip: "rounded-none border-2", size: "rounded-none border-2", qty: "rounded-none border-2", cta: "rounded-sm" },
+    atelier: { chip: "rounded-full", size: "rounded-full", qty: "rounded-full", cta: "rounded-full" },
   }[theme] ?? { chip: "rounded-full", size: "rounded-lg", qty: "rounded-full", cta: "rounded-full" };
 
   return (

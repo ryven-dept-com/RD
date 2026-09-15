@@ -84,6 +84,14 @@ const NAV_THEME = {
       "block border-2 border-ink bg-brand-50 px-3 py-3 font-display text-sm uppercase tracking-[0.08em] hover:bg-olive",
     mobileWrap: "gap-2",
   },
+  atelier: {
+    wordmark: "font-display text-xl tracking-tight sm:text-2xl",
+    dept: "text-[10px] font-semibold uppercase tracking-[0.45em] text-amber",
+    links: "text-[11px] font-semibold uppercase tracking-[0.28em]",
+    mobileLink:
+      "block border-b border-black/10 px-3 py-4 font-display text-2xl uppercase tracking-tight transition-colors hover:text-amber",
+    mobileWrap: "gap-0",
+  },
 } as const;
 
 export function NavbarClient({ links }: { links: NavLink[] }) {

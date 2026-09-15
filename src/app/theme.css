@@ -232,6 +232,33 @@
   --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
 }
 
+/* --- 08 ATELIER — editorial streetwear lookbook --------------------------- */
+[data-theme="atelier"] {
+  --rd-ink: #171512;
+  --rd-ink-soft: #232019;
+  --rd-bone: #f6f4ef;
+  --rd-sand: #e3ded2;
+  --rd-clay: #8f8574;
+  --rd-amber: #37503b; /* deep forest green = the editorial accent */
+  --rd-olive: #b4552d; /* terracotta = the counter-accent */
+  --rd-brand-50: #efede6;
+  --rd-brand-100: #e5e1d6;
+  --rd-brand-400: #6e6759;
+  --rd-brand-500: #4f4a40;
+  --rd-brand-900: #12100d;
+  --rd-panel: #171512;
+  --rd-panel-soft: #232019;
+  --rd-panel-fg: #f6f4ef;
+  --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --rd-font-display: var(--font-syne), sans-serif;
+  --rd-hero-overlay: 246 244 239;
+  --rd-card-bg: transparent;
+  --rd-ticker-bg: transparent;
+  --rd-ticker-fg: var(--rd-ink);
+  --rd-font-ar-display: var(--font-cairo), Tahoma, sans-serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
+}
+
 /* ----------------------------------------------------------------------------
    2. DARK-ON-LIGHT / LIGHT-ON-DARK UTILITY REMAPS
    The storefront uses black/… and white/… opacity utilities for muted text,
@@ -736,6 +763,7 @@ body:has([data-theme="concrete"]) { background-color: #d8d6d1; }
 body:has([data-theme="archive"]) { background-color: #efe8da; }
 body:has([data-theme="signature"]) { background-color: #fbfaf7; }
 body:has([data-theme="seventh"]) { background-color: #f2efe6; }
+body:has([data-theme="atelier"]) { background-color: #f6f4ef; }
 
 /* ----------------------------------------------------------------------------
    8. STOREFRONT COMPONENT ARCHITECTURE — per-theme component styling
@@ -934,3 +962,58 @@ body:has([data-theme="seventh"]) { background-color: #f2efe6; }
 [data-theme="seventh"] .animate-fade-up { animation-duration: 0.45s; animation-timing-function: cubic-bezier(0.2, 0.9, 0.25, 1.2); }
 /* RTL: soften the rotated stickers so Arabic compositions stay calm */
 [dir="rtl"] [data-theme="seventh"] .sb-sticker { transform: rotate(2deg); }
+
+/* ----------------------------------------------------------------------------
+   12. ATELIER — editorial lookbook extensions
+   Full-bleed campaign hero, trailing-dot headings, hairline rules, pill CTAs
+   and scroll-snap rails. All helpers are theme-scoped: they only resolve
+   inside the ATELIER storefront (or global utilities used by it).
+   -------------------------------------------------------------------------- */
+
+/* trailing editorial dot: "HEADING." */
+[data-theme="atelier"] .at-dot { color: var(--rd-amber); margin-inline-start: 0.08em; }
+[data-theme="atelier"] .rd-hero--lookbook .at-dot { color: color-mix(in oklab, var(--rd-bone) 80%, transparent); }
+[data-theme="atelier"] .rd-dark-panel .at-dot { color: var(--rd-olive); }
+
+/* scroll-snap product rail: no visible scrollbar, snap to cards */
+[data-theme="atelier"] .at-rail { scrollbar-width: none; scroll-padding-inline: 1rem; }
+[data-theme="atelier"] .at-rail::-webkit-scrollbar { display: none; }
+
+/* lookbook hero: full-bleed campaign photo, centered editorial type */
+[data-theme="atelier"] .rd-hero--lookbook { background: var(--rd-panel); color: var(--rd-bone); }
+[data-theme="atelier"] .rd-hero--lookbook .rd-hero-veil-a {
+  background: linear-gradient(to top, rgba(10, 9, 8, 0.72), rgba(10, 9, 8, 0.28) 45%, rgba(10, 9, 8, 0.12));
+}
+[data-theme="atelier"] .rd-hero--lookbook h1 {
+  font-size: clamp(2.6rem, 7.5vw, 6.5rem);
+  max-width: 16ch;
+  margin-inline: auto;
+}
+[data-theme="atelier"] .rd-hero--lookbook .rd-hero-eyebrow {
+  letter-spacing: 0.35em;
+  background: color-mix(in oklab, var(--rd-bone) 8%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+/* display voice: art-fashion caps, tight but calm */
+[data-theme="atelier"] .font-display { letter-spacing: -0.01em; }
+[data-theme="atelier"] header nav ul { text-transform: uppercase; }
+
+/* commerce voice: pill CTAs everywhere */
+[data-theme="atelier"] .rd-cta { border-radius: 9999px; letter-spacing: 0.16em; }
+
+/* PDP voice: sticky gallery frame with hairline, editorial heading scale */
+[data-theme="atelier"] .rd-pdp .rd-gallery-frame {
+  border-radius: 0;
+  border: 1px solid color-mix(in oklab, var(--rd-ink) 15%, transparent);
+  background: var(--rd-brand-50);
+}
+[data-theme="atelier"] .rd-pdp h1 { font-size: clamp(1.9rem, 5vw, 3.4rem); }
+[data-theme="atelier"] .rd-pdp .rd-pdp-kicker { letter-spacing: 0.3em; }
+
+/* card voice: hairline frames keep their quiet border on hover */
+[data-theme="atelier"] .at-card .rd-card-frame { transition: border-color 0.3s ease; }
+[data-theme="atelier"] .at-card:hover .rd-card-frame { border-color: color-mix(in oklab, var(--rd-ink) 30%, transparent); }
+
+/* RTL: Arabic display face takes over headings; dots stay inline-end */
+[dir="rtl"] [data-theme="atelier"] .rd-hero--lookbook h1 { line-height: 1.12; }

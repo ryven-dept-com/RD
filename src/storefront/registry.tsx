@@ -43,6 +43,12 @@ import { SeventhHome } from "./themes/seventh/home";
 import { SeventhPdp } from "./themes/seventh/pdp";
 import { SeventhShop } from "./themes/seventh/shop";
 
+import { AtelierCard } from "./themes/atelier/card";
+import { AtelierFooter } from "./themes/atelier/footer";
+import { AtelierHome } from "./themes/atelier/home";
+import { AtelierPdp } from "./themes/atelier/pdp";
+import { AtelierShop } from "./themes/atelier/shop";
+
 /**
  * Storefront registry — every theme provides a COMPLETE storefront surface
  * (Home / Shop / PDP / Footer / Card). Pages resolve the active theme and
@@ -50,7 +56,7 @@ import { SeventhShop } from "./themes/seventh/shop";
  * server-rendered tree, so their client modules are never streamed or
  * downloaded by customers.
  *
- * All seven consume the SAME data loaders, business components and APIs —
+ * All eight consume the SAME data loaders, business components and APIs —
  * nothing below the presentation layer knows a theme exists.
  */
 const STOREFRONTS: Record<ThemeId, StorefrontComponents> = {
@@ -102,6 +108,13 @@ const STOREFRONTS: Record<ThemeId, StorefrontComponents> = {
     Pdp: SeventhPdp,
     FooterView: SeventhFooter,
     Card: SeventhCard,
+  },
+  atelier: {
+    Home: AtelierHome,
+    Shop: AtelierShop,
+    Pdp: AtelierPdp,
+    FooterView: AtelierFooter,
+    Card: AtelierCard,
   },
 };
 
