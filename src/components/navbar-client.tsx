@@ -17,9 +17,70 @@ export type NavLink = {
   systemKey?: string;
 };
 
+/**
+ * Per-theme navigation identity — the SAME state/search/cart/language logic,
+ * expressed as six different headers:
+ *   noir      → editorial wide-tracked links, monumental mobile menu
+ *   concrete  → industrial tight links with amber hover rule, framed mobile
+ *   district  → the house balanced bar
+ *   nightshift→ spaced technical links with glow dot, HUD mobile menu
+ *   archive   → serif accents, catalog mobile list
+ *   signature → whispered small-caps links, airy centered mobile menu
+ */
+const NAV_THEME = {
+  noir: {
+    wordmark: "font-display text-xl sm:text-2xl",
+    dept: "text-[10px] font-semibold uppercase tracking-[0.5em] opacity-70",
+    links: "text-[12px] uppercase tracking-[0.25em] font-semibold",
+    mobileLink: "block px-3 py-3.5 font-display text-3xl uppercase tracking-tight hover:opacity-60",
+    mobileWrap: "",
+  },
+  concrete: {
+    wordmark: "font-display text-xl font-bold sm:text-2xl",
+    dept: "text-[10px] font-bold uppercase tracking-[0.3em] text-amber",
+    links: "text-[12px] font-bold uppercase tracking-[0.15em]",
+    mobileLink:
+      "block border-2 border-ink px-3 py-3 text-sm font-bold uppercase tracking-[0.15em] hover:bg-ink hover:text-bone",
+    mobileWrap: "gap-2",
+  },
+  district: {
+    wordmark: "font-display text-xl tracking-tight sm:text-2xl",
+    dept: "text-[10px] font-semibold uppercase tracking-[0.25em] opacity-70",
+    links: "text-[13px] font-medium uppercase tracking-wide",
+    mobileLink:
+      "block rounded-lg px-3 py-3 text-sm font-semibold uppercase tracking-wide hover:bg-black/5",
+    mobileWrap: "gap-1",
+  },
+  nightshift: {
+    wordmark: "font-display text-xl sm:text-2xl",
+    dept: "text-[10px] font-semibold uppercase tracking-[0.4em] text-amber",
+    links: "text-[12px] font-semibold uppercase tracking-[0.3em]",
+    mobileLink:
+      "block rounded-md border border-brand-100 px-3 py-3 text-sm font-semibold uppercase tracking-[0.2em] hover:border-amber",
+    mobileWrap: "gap-2",
+  },
+  archive: {
+    wordmark: "font-display text-xl font-medium sm:text-2xl",
+    dept: "font-display text-[11px] italic tracking-[0.2em] opacity-70",
+    links: "font-display text-[13px] tracking-[0.05em]",
+    mobileLink:
+      "block border-b border-black/10 px-3 py-3.5 font-display text-lg hover:bg-black/5",
+    mobileWrap: "gap-0",
+  },
+  signature: {
+    wordmark: "font-display text-lg font-normal tracking-[0.08em] sm:text-xl",
+    dept: "text-[9px] font-medium uppercase tracking-[0.5em] opacity-60",
+    links: "text-[11px] font-medium uppercase tracking-[0.35em]",
+    mobileLink:
+      "block py-4 text-center text-xs font-medium uppercase tracking-[0.35em] hover:opacity-60",
+    mobileWrap: "gap-0 divide-y divide-black/10",
+  },
+} as const;
+
 export function NavbarClient({ links }: { links: NavLink[] }) {
   const { count, openCart } = useCart();
-  const { logoUrl, storeName } = useStoreConfig();
+  const { logoUrl, storeName, theme } = useStoreConfig();
+  const navTheme = NAV_THEME[theme] ?? NAV_THEME.district;
   const t = useT();
   const pathname = usePathname();
   const label = (l: NavLink) => (l.systemKey ? t(l.systemKey) : l.label);
@@ -78,17 +139,13 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
               />
             ) : (
               <>
-                <span className="font-display text-xl tracking-tight sm:text-2xl">
-                  RUVEN
-                </span>
-                <span className="text-[10px] font-semibold uppercase tracking-[0.25em] opacity-70">
-                  Dept.
-                </span>
+                <span className={navTheme.wordmark}>RUVEN</span>
+                <span className={navTheme.dept}>Dept.</span>
               </>
             )}
           </Link>
 
-          <ul className="hidden items-center gap-6 text-[13px] font-medium uppercase tracking-wide lg:flex">
+          <ul className={`hidden items-center gap-6 lg:flex ${navTheme.links}`}>
             {links.map((l) => (
               <li key={l.href}>
                 <Link
@@ -143,13 +200,10 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
           <div>
             <LanguageSwitcher />
           </div>
-          <ul className="flex flex-col gap-1">
+          <ul className={`flex flex-col ${navTheme.mobileWrap}`}>
             {links.map((l) => (
               <li key={l.href}>
-                <Link
-                  href={l.href}
-                  className="block rounded-lg px-3 py-3 text-sm font-semibold uppercase tracking-wide hover:bg-black/5"
-                >
+                <Link href={l.href} className={navTheme.mobileLink}>
                   {label(l)}
                 </Link>
               </li>

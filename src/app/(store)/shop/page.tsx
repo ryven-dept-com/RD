@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cookies, headers } from "next/headers";
-import Link from "next/link";
 import {
   getActiveCategoryByRef,
   getProducts,
@@ -8,14 +7,12 @@ import {
   getStorefrontCategories,
   type ProductFilters,
 } from "@/lib/queries";
-import { ProductCard } from "@/components/product-card";
-import {
-  DesktopFilters,
-  MobileFilters,
-  SearchBar,
-  SortSelect,
-} from "./shop-controls";
 import { LOCALE_COOKIE, resolveLocale, translate } from "@/i18n/translations";
+import { formatMoney, isoCurrencyCode } from "@/lib/money";
+import { getStoreSettings } from "@/lib/settings";
+import { resolveStorefrontTheme } from "@/lib/theme-server";
+import { getStorefront } from "@/storefront/registry";
+import type { ShopPresentation } from "@/storefront/types";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +91,10 @@ export async function generateMetadata({
   return { title: "Shop All", description: DEFAULT_SHOP_DESCRIPTION };
 }
 
+/**
+ * Shop / collection / search results — data + filters only. The ACTIVE
+ * THEME renders the surface (header, filter arrangement, grid structure).
+ */
 export default async function ShopPage({
   searchParams,
 }: {
@@ -121,11 +122,14 @@ export default async function ShopPage({
       Number.isFinite(maxPriceRaw) && maxPriceRaw > 0 ? maxPriceRaw : undefined,
   };
 
-  const [products, filterOptions, dbCategories] = await Promise.all([
-    getProducts(filters),
-    getShopFilterOptions(),
-    getStorefrontCategories(),
-  ]);
+  const [products, filterOptions, dbCategories, themeRes, store] =
+    await Promise.all([
+      getProducts(filters),
+      getShopFilterOptions(),
+      getStorefrontCategories(),
+      resolveStorefrontTheme(),
+      getStoreSettings().catch(() => null),
+    ]);
 
   // Filters get ACTIVE database categories/collections — no hardcoded lists.
   const options = {
@@ -133,7 +137,6 @@ export default async function ShopPage({
     categories: dbCategories.map((c) => c.name),
   };
 
-  // The category landing text uses the real category record (Phase 6).
   const activeCategory = filters.category
     ? dbCategories.find(
         (c) => c.name.toLowerCase() === filters.category!.toLowerCase(),
@@ -150,6 +153,8 @@ export default async function ShopPage({
   }
   const tr = (key: string, vars?: Record<string, string | number>) =>
     translate(locale, key, vars);
+  const iso = isoCurrencyCode(store?.currency ?? "دج");
+  const fmt = (cents: number) => formatMoney(cents, locale, iso);
 
   const heading = filters.q
     ? tr("shop.searchResults", { q: filters.q })
@@ -167,73 +172,13 @@ export default async function ShopPage({
                 ? tr("shop.onSale")
                 : tr("nav.shopAll");
 
-  return (
-    <div className="rd-needs-offset bg-bone pt-16">
-      {/* header band */}
-      <div className="border-b border-black/10 bg-brand-50">
-        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
-          <nav className="mb-3 flex items-center gap-2 text-xs uppercase tracking-widest text-black/40">
-            <Link href="/" className="hover:text-ink">
-              {tr("shop.home")}
-            </Link>
-            <span>/</span>
-            <span className="text-ink">{heading}</span>
-          </nav>
-          <h1 className="font-display text-5xl uppercase tracking-tight sm:text-6xl">
-            {heading}
-          </h1>
-          <p className="mt-2 max-w-xl text-sm text-black/50">
-            {tr("shop.subtitle", { count: products.length })}
-          </p>
-          {activeCategory?.description && (
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-black/60">
-              {activeCategory.description}
-            </p>
-          )}
-        </div>
-      </div>
+  const presentation: ShopPresentation = {
+    products,
+    options,
+    heading,
+    categoryDescription: activeCategory?.description ?? "",
+  };
 
-      <div className="mx-auto flex max-w-7xl gap-10 px-4 py-10 sm:px-6 lg:px-8">
-        <DesktopFilters options={options} />
-
-        <div className="min-w-0 flex-1">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:flex-1">
-              <MobileFilters options={options} />
-              <SearchBar className="max-w-md flex-1" />
-            </div>
-            <SortSelect resultCount={products.length} />
-          </div>
-
-          {products.length === 0 ? (
-            <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-black/15 py-24 text-center">
-              <p className="font-display text-3xl uppercase tracking-wide">
-                {tr("shop.nothingHere")}
-              </p>
-              <p className="max-w-sm text-sm text-black/50">
-                {tr("shop.noResults")}
-              </p>
-              <Link
-                href="/shop"
-                className="rounded-full bg-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest text-bone"
-              >
-                {tr("shop.viewAll")}
-              </Link>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3">
-              {products.map((p, i) => (
-                <ProductCard
-                  key={p.slug}
-                  product={p}
-                  index={i}
-                  priority={i < 3}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  const { Shop } = getStorefront(themeRes.rendered.id);
+  return <Shop data={presentation} tr={tr} fmt={fmt} />;
 }

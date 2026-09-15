@@ -275,9 +275,8 @@
    4. SHARED THEME HOOKS
    -------------------------------------------------------------------------- */
 
-/* numbered product-card index: hidden unless a theme opts in */
+/* numbered product-card index: legacy hook kept for compatibility */
 .rd-card { position: relative; }
-.rd-card-index { display: none; }
 
 /* hero hooks */
 .rd-hero-inner { position: relative; }
@@ -385,27 +384,11 @@
   content: " / RD";
   opacity: 0.6;
 }
-/* cards: hard frames, no radius, monochrome imagery, oversized index */
+/* cards: hard frames, no radius, monochrome imagery — index handled by the
+   component's corner plate */
 [data-theme="concrete"] .rd-card .rd-card-img {
   border-radius: 0;
   border: 2px solid var(--rd-ink);
-}
-[data-theme="concrete"] .rd-card .rd-card-img img { filter: grayscale(1) contrast(1.06); }
-[data-theme="concrete"] .rd-card:hover .rd-card-img img { filter: grayscale(0.1) contrast(1.02); }
-[data-theme="concrete"] .rd-card-index {
-  display: block;
-  position: absolute;
-  inset-inline-end: 0.5rem;
-  top: 0.5rem;
-  z-index: 10;
-  font-family: var(--rd-font-display);
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  background: var(--rd-bone);
-  color: var(--rd-ink);
-  border: 2px solid var(--rd-ink);
-  padding: 0.15rem 0.5rem;
 }
 [data-theme="concrete"] .rd-card h3 {
   font-family: var(--rd-font-display);
@@ -494,7 +477,7 @@
 [data-theme="archive"] .rd-hero--catalog .border-bone\/40 { border-color: color-mix(in oklab, var(--rd-ink) 40%, transparent); }
 [data-theme="archive"] .rd-hero--catalog .bg-bone\/10 { background-color: color-mix(in oklab, var(--rd-ink) 10%, transparent); }
 
-/* cards: cream matte frames + ledger numbering */
+/* cards: cream matte frames — the accession chip is component markup */
 [data-theme="archive"] .rd-card .rd-card-img {
   border-radius: 2px;
   border: 1px solid color-mix(in oklab, var(--rd-ink) 55%, transparent);
@@ -502,22 +485,6 @@
   background: var(--rd-brand-50);
 }
 [data-theme="archive"] .rd-card .rd-card-img img { border-radius: 0; }
-[data-theme="archive"] .rd-card-index {
-  display: block;
-  position: absolute;
-  inset-inline-start: 1rem;
-  inset-block-end: 1rem;
-  z-index: 10;
-  font-family: var(--rd-font-display);
-  font-size: 0.72rem;
-  font-style: italic;
-  letter-spacing: 0.08em;
-  background: var(--rd-brand-50);
-  color: var(--rd-brand-500);
-  border: 1px solid color-mix(in oklab, var(--rd-ink) 40%, transparent);
-  padding: 0.1rem 0.5rem;
-}
-[data-theme="archive"] .rd-card-index::before { content: "No. "; }
 [data-theme="archive"] .rd-card h3 {
   font-family: var(--rd-font-display);
   font-size: 1.02rem;
@@ -669,3 +636,68 @@ body:has([data-theme="nightshift"]) { background-color: #07080d; }
 body:has([data-theme="concrete"]) { background-color: #d8d6d1; }
 body:has([data-theme="archive"]) { background-color: #efe8da; }
 body:has([data-theme="signature"]) { background-color: #fbfaf7; }
+
+/* ----------------------------------------------------------------------------
+   8. STOREFRONT COMPONENT ARCHITECTURE — per-theme component styling
+   (src/storefront/themes/*). Tokens + hooks above stay shared; each block
+   below only supports markup that theme actually renders.
+   -------------------------------------------------------------------------- */
+
+/* --- RAW CONCRETE: industrial monochrome imagery -------------------------- */
+[data-theme="concrete"] .concrete-img { filter: grayscale(1) contrast(1.06); }
+[data-theme="concrete"] .concrete-card:hover .concrete-img,
+[data-theme="concrete"] .group:hover .concrete-img {
+  filter: grayscale(0.1) contrast(1.02);
+}
+[data-theme="concrete"] .concrete-card { border-radius: 0; }
+[data-theme="concrete"] .font-display { font-weight: 700; }
+
+/* --- NIGHT SHIFT: controlled glow ----------------------------------------- */
+[data-theme="nightshift"] .ns-card-frame:hover {
+  border-color: rgba(var(--rd-glow), 0.45);
+  box-shadow: 0 18px 44px -18px rgba(var(--rd-glow), 0.35);
+}
+[data-theme="nightshift"] .ns-panel {
+  box-shadow: inset 0 0 0 1px rgba(var(--rd-glow), 0.06);
+}
+[data-theme="nightshift"] .ns-tile:hover {
+  border-color: rgba(var(--rd-glow), 0.4);
+  box-shadow: 0 14px 40px -20px rgba(var(--rd-glow), 0.4);
+}
+[data-theme="nightshift"] .ns-readout {
+  box-shadow: inset 0 0 0 1px rgba(var(--rd-glow), 0.08);
+}
+
+/* --- ARCHIVE: sepia plates ------------------------------------------------ */
+[data-theme="archive"] .archive-img { filter: sepia(0.18) contrast(0.95) brightness(1.01); }
+[data-theme="archive"] .archive-card:hover .archive-img { filter: sepia(0.08) contrast(0.97); }
+[data-theme="archive"] .font-display { font-weight: 500; }
+
+/* --- SIGNATURE: whisper imagery ------------------------------------------- */
+[data-theme="signature"] .signature-img { filter: saturate(0.88) contrast(0.97); }
+[data-theme="signature"] .signature-card:hover .signature-img { opacity: 0.93; }
+
+/* --- NOIR: editorial card captions breathe on hover ------------------------ */
+[data-theme="noir"] .noir-card:hover .rd-card-img img { transform: scale(1.05); }
+[data-theme="noir"] .noir-card-kicker { transition: color 0.4s ease; }
+[data-theme="noir"] .noir-card:hover .noir-card-kicker { color: var(--rd-amber); }
+
+/* --- ARCHIVE / SIGNATURE light heroes need a dark-contrast navbar --------- */
+[data-theme="archive"] .rd-nav-over-hero,
+[data-theme="signature"] .rd-nav-over-hero { color: var(--rd-ink); }
+
+/* --- ARCHIVE home hero uses the catalog veil ------------------------------- */
+[data-theme="archive"] .rd-hero--catalog .rd-hero-veil-a,
+[data-theme="archive"] .rd-hero--catalog .rd-hero-veil-b { display: none; }
+
+/* --- SIGNATURE minimal hero veil (soft cream wash over imagery) ------------ */
+[data-theme="signature"] .rd-hero--minimal .rd-hero-veil-a {
+  background: linear-gradient(to top, rgba(251, 250, 247, 0.97), rgba(251, 250, 247, 0.55) 45%, rgba(251, 250, 247, 0.25));
+}
+[data-theme="signature"] .rd-hero--minimal .rd-hero-veil-b { display: none; }
+
+/* --- checkout surfaces follow the theme via tokens; keep hard corners for
+       brutalist/luxury identities and pills for the rest -------------------- */
+[data-theme="concrete"] .rd-needs-offset .rounded-2xl { border-radius: 0.375rem; }
+[data-theme="signature"] section { scroll-margin-top: 6rem; }
+

@@ -9,7 +9,6 @@ import {
 import { MetaPixel } from "@/components/meta-pixel";
 import { Navbar } from "@/components/navbar";
 import { CartDrawer } from "@/components/cart-drawer";
-import { Footer } from "@/components/footer";
 import {
   DEFAULT_FOOTER,
   DEFAULT_NEWSLETTER,
@@ -17,6 +16,10 @@ import {
 } from "@/lib/cms";
 import { getStoreSettings } from "@/lib/settings";
 import { resolveStorefrontTheme } from "@/lib/theme-server";
+import { getStorefront } from "@/storefront/registry";
+import type { FooterStrings } from "@/storefront/types";
+import { LOCALE_COOKIE, resolveLocale, translate } from "@/i18n/translations";
+import { cookies } from "next/headers";
 import "../theme.css";
 
 export default async function StoreLayout({
@@ -37,6 +40,15 @@ export default async function StoreLayout({
   // zero extra queries); an admin live-preview can override presentation via
   // a validated HMAC cookie without writing anything.
   const { preview, rendered } = await resolveStorefrontTheme();
+
+  // Visitor locale — lets theme footers stay pure server components by
+  // pre-resolving their few chrome strings here (zero client JS).
+  let footerLocale = resolveLocale(undefined);
+  try {
+    footerLocale = resolveLocale((await cookies()).get(LOCALE_COOKIE)?.value);
+  } catch {
+    // default locale
+  }
 
   try {
     const [cms, store] = await Promise.all([getCmsData(), getStoreSettings()]);
@@ -101,12 +113,33 @@ export default async function StoreLayout({
           <Navbar />
           <CartDrawer />
           <main className="min-h-screen">{children}</main>
-          <Footer
-            content={{ ...footerContent, socialLinks }}
-            newsletter={newsletterContent}
-            contact={contact}
-            storeName={config.storeName}
-          />
+          {(() => {
+            const { FooterView } = getStorefront(rendered.id);
+            // Pre-resolve the footer's few chrome strings so every theme
+            // footer can be a pure SERVER component (no client JS shipped
+            // for any theme's footer).
+            const strings: FooterStrings = {
+              newsletterPlaceholder: translate(footerLocale, "footer.newsletterPlaceholder"),
+              join: translate(footerLocale, "footer.join"),
+              privacy: translate(footerLocale, "footer.privacy"),
+              terms: translate(footerLocale, "footer.terms"),
+              accessibility: translate(footerLocale, "footer.accessibility"),
+              copyright: translate(footerLocale, "footer.copyright", {
+                name: config.storeName || "RUVEN DEPT",
+              }),
+            };
+            return (
+              <FooterView
+                data={{
+                  content: { ...footerContent, socialLinks },
+                  newsletter: newsletterContent,
+                  contact,
+                  storeName: config.storeName,
+                  strings,
+                }}
+              />
+            );
+          })()}
         </div>
       </CartProvider>
     </StoreConfigProvider>

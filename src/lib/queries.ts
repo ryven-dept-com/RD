@@ -10,7 +10,7 @@ import {
 } from "@/db/schema";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { memoizePerRequest } from "@/lib/cache";
-import type { ProductCardData } from "@/components/product-card";
+import type { CardProduct as ProductCardData } from "@/storefront/types";
 
 export type RatingMap = Map<number, { avg: number; count: number }>;
 

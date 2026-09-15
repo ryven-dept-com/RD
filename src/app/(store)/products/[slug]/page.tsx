@@ -1,24 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProductBySlug } from "@/lib/queries";
-import { formatDate } from "@/lib/format";
-import { getStoreSettings } from "@/lib/settings";
-import { formatMoney, formatWholeMoney, isoCurrencyCode } from "@/lib/money";
-import {
-  LOCALE_COOKIE,
-  localeTag,
-  resolveLocale,
-  translate,
-} from "@/i18n/translations";
 import { cookies } from "next/headers";
+import { getProductBySlug } from "@/lib/queries";
+import { getStoreSettings } from "@/lib/settings";
 import { resolveStorefrontTheme } from "@/lib/theme-server";
-import { ProductCard } from "@/components/product-card";
-import { StarRating } from "@/components/star-rating";
-import { CheckIcon, RefreshIcon, TruckIcon } from "@/components/icons";
-import { ProductGallery } from "./product-gallery";
-import { ProductPurchase } from "./product-purchase";
-import { ReviewForm } from "./review-form";
+import { formatMoney, formatWholeMoney, isoCurrencyCode } from "@/lib/money";
+import { LOCALE_COOKIE, resolveLocale, translate } from "@/i18n/translations";
+import { getStorefront } from "@/storefront/registry";
+import type { PdpPresentation } from "@/storefront/types";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +29,13 @@ export async function generateMetadata({
   };
 }
 
+/**
+ * Product detail page — data + locale resolution only. The ACTIVE THEME
+ * provides the complete PDP surface (gallery composition, info hierarchy,
+ * purchase placement, reviews, related) while every business component
+ * (gallery, purchase, review form, stock/variant logic, Meta ViewContent)
+ * stays shared and untouched.
+ */
 export default async function ProductPage({
   params,
 }: {
@@ -55,8 +51,6 @@ export default async function ProductPage({
   ]);
   if (!detail) notFound();
 
-  // Phase 9: resolve the visitor's language + use the centralized money
-  // formatter (cents → localized string, ISO-normalized currency).
   let locale = resolveLocale(undefined);
   try {
     locale = resolveLocale((await cookies()).get(LOCALE_COOKIE)?.value);
@@ -66,7 +60,7 @@ export default async function ProductPage({
   const tr = (key: string, vars?: Record<string, string | number>) =>
     translate(locale, key, vars);
   const iso = isoCurrencyCode(store?.currency ?? "");
-  const formatPrice = (cents: number) => formatMoney(cents, locale, iso);
+  const fmt = (cents: number) => formatMoney(cents, locale, iso);
 
   const { product, reviews, avgRating, reviewCount, related } = detail;
   const onSale =
@@ -79,272 +73,42 @@ export default async function ProductPage({
         ? tr("product.sale")
         : null;
 
-  const dist = [5, 4, 3, 2, 1].map((star) => ({
-    star,
-    count: reviews.filter((r) => r.rating === star).length,
-  }));
+  const presentation: PdpPresentation = {
+    product: {
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      tagline: product.tagline,
+      description: product.description,
+      category: product.category,
+      collection: product.collection,
+      price: product.price,
+      compareAtPrice: product.compareAtPrice,
+      images: product.images,
+      sizes: product.sizes,
+      colors: product.colors,
+      stock: product.stock,
+      details: product.details ?? [],
+    },
+    variants: detail.variants,
+    reviews,
+    avgRating,
+    reviewCount,
+    related,
+    badge,
+    onSale,
+    dist: [5, 4, 3, 2, 1].map((star) => ({
+      star,
+      count: reviews.filter((r) => r.rating === star).length,
+    })),
+    freeShipAmount: formatWholeMoney(
+      store?.freeShippingThreshold ?? 5000,
+      locale,
+      iso,
+    ),
+    locale,
+  };
 
-  return (
-    <div className={`rd-pdp rd-pdp--${themeRes.rendered.pdp} rd-needs-offset bg-bone pt-16`}>
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <nav className="flex items-center gap-2 text-xs uppercase tracking-widest text-black/40">
-          <Link href="/" className="hover:text-ink">
-            {tr("shop.home")}
-          </Link>
-          <span>/</span>
-          <Link
-            href={`/shop?category=${encodeURIComponent(product.category)}`}
-            className="hover:text-ink"
-          >
-            {product.category}
-          </Link>
-          <span>/</span>
-          <span className="truncate text-ink">{product.name}</span>
-        </nav>
-      </div>
-
-      {/* main */}
-      <div className="rd-pdp-grid mx-auto grid max-w-7xl gap-10 px-4 pb-16 sm:px-6 lg:grid-cols-2 lg:gap-14 lg:px-8">
-        <ProductGallery
-          images={product.images}
-          name={product.name}
-          badge={badge}
-        />
-
-        <div className="rd-pdp-info lg:py-2">
-          <p className="rd-pdp-kicker text-xs font-semibold uppercase tracking-[0.25em] text-black/40">
-            {product.collection} · {product.category}
-          </p>
-          <h1 className="mt-2 font-display text-4xl uppercase leading-tight tracking-tight sm:text-5xl">
-            {product.name}
-          </h1>
-          <p className="mt-2 text-black/60">{product.tagline}</p>
-
-          {reviewCount > 0 && (
-            <a
-              href="#reviews"
-              className="mt-3 inline-flex items-center gap-2 text-sm text-black/60 hover:text-ink"
-            >
-              <StarRating rating={avgRating} size={16} />
-              <span className="font-medium">{avgRating}</span>
-              <span className="text-black/40">
-                (
-                {tr(
-                  reviewCount === 1
-                    ? "product.reviewCountOne"
-                    : "product.reviewCountMany",
-                  { count: reviewCount },
-                )}
-                )
-              </span>
-            </a>
-          )}
-
-          <div className="mt-5 flex items-center gap-3">
-            <span className="font-display text-3xl">
-              {formatPrice(product.price)}
-            </span>
-            {onSale && (
-              <>
-                <span className="text-lg text-black/35 line-through">
-                  {formatPrice(product.compareAtPrice!)}
-                </span>
-                <span className="rounded-full bg-amber/20 px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-amber-800">
-                  {tr("product.save", {
-                    amount: formatPrice(product.compareAtPrice! - product.price),
-                  })}
-                </span>
-              </>
-            )}
-          </div>
-
-          <p className="mt-5 leading-relaxed text-black/70">
-            {product.description}
-          </p>
-
-          <div className="mt-7">
-            <ProductPurchase
-              productId={product.id}
-              slug={product.slug}
-              name={product.name}
-              price={product.price}
-              image={product.images[0] ?? ""}
-              sizes={product.sizes}
-              colors={product.colors}
-              stock={product.stock}
-              category={product.category}
-              variants={detail.variants}
-            />
-          </div>
-
-          {/* perks */}
-          <div className="mt-8 grid grid-cols-1 gap-3 rounded-2xl border border-black/10 bg-brand-50 p-5 sm:grid-cols-3">
-            {[
-              {
-                icon: TruckIcon,
-                label: tr("product.perkShipping", {
-                  amount: formatWholeMoney(
-                    store?.freeShippingThreshold ?? 5000,
-                    locale,
-                    iso,
-                  ),
-                }),
-              },
-              { icon: RefreshIcon, label: tr("home.usp2Title") },
-              { icon: CheckIcon, label: tr("product.perkSecure") },
-            ].map((perk) => (
-              <div key={perk.label} className="flex items-center gap-2.5">
-                <perk.icon className="h-5 w-5 shrink-0 text-ink" />
-                <span className="text-xs font-medium text-black/70">
-                  {perk.label}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* details */}
-          {product.details.length > 0 && (
-            <div className="mt-8">
-              <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-black/40">
-                {tr("product.detailsTitle")}
-              </h2>
-              <ul className="mt-3 space-y-2">
-                {product.details.map((d) => (
-                  <li
-                    key={d}
-                    className="flex items-start gap-2.5 text-sm text-black/70"
-                  >
-                    <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-ink" />
-                    {d}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* REVIEWS */}
-      <section id="reviews" className="border-t border-black/10 bg-brand-50 py-16">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <h2 className="font-display text-4xl uppercase tracking-tight sm:text-5xl">
-            {tr("product.reviewsTitle")}
-          </h2>
-
-          <div className="mt-8 grid gap-12 lg:grid-cols-[320px_1fr]">
-            {/* summary */}
-            <div>
-              <div className="rounded-2xl border border-black/10 bg-bone p-6">
-                <div className="flex items-end gap-3">
-                  <span className="font-display text-5xl leading-none">
-                    {reviewCount ? avgRating : "—"}
-                  </span>
-                  <div className="pb-1">
-                    <StarRating rating={avgRating} size={16} />
-                    <p className="mt-1 text-xs text-black/50">
-                      {tr(
-                        reviewCount === 1
-                          ? "product.reviewCountOne"
-                          : "product.reviewCountMany",
-                        { count: reviewCount },
-                      )}
-                    </p>
-                  </div>
-                </div>
-
-                {reviewCount > 0 && (
-                  <div className="mt-5 space-y-2">
-                    {dist.map((d) => (
-                      <div key={d.star} className="flex items-center gap-2">
-                        <span className="w-3 text-xs text-black/50">
-                          {d.star}
-                        </span>
-                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-black/10">
-                          <div
-                            className="h-full rounded-full bg-amber-500"
-                            style={{
-                              width: `${
-                                reviewCount ? (d.count / reviewCount) * 100 : 0
-                              }%`,
-                            }}
-                          />
-                        </div>
-                        <span className="w-5 text-end text-xs tabular-nums text-black/40">
-                          {d.count}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="mt-6">
-                  <ReviewForm productId={product.id} />
-                </div>
-              </div>
-            </div>
-
-            {/* list */}
-            <div>
-              {reviews.length === 0 ? (
-                <p className="rounded-2xl border border-dashed border-black/15 p-10 text-center text-sm text-black/50">
-                  {tr("product.noReviews")}
-                </p>
-              ) : (
-                <ul className="space-y-5">
-                  {reviews.map((r) => (
-                    <li
-                      key={r.id}
-                      className="rounded-2xl border border-black/10 bg-bone p-5"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-ink text-sm font-bold text-bone">
-                            {r.author.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold">{r.author}</p>
-                            <div className="flex items-center gap-2">
-                              <StarRating rating={r.rating} size={13} />
-                              {r.verified && (
-                                <span className="flex items-center gap-1 text-[11px] font-medium text-olive">
-                                  <CheckIcon className="h-3 w-3" /> {tr("product.verified")}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-xs text-black/40">
-                          {formatDate(r.createdAt, localeTag(locale))}
-                        </span>
-                      </div>
-                      {r.title && (
-                        <h3 className="mt-3 text-sm font-semibold">{r.title}</h3>
-                      )}
-                      <p className="mt-1 text-sm leading-relaxed text-black/70">
-                        {r.body}
-                      </p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* RELATED */}
-      {related.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-          <h2 className="font-display text-3xl uppercase tracking-tight sm:text-4xl">
-            {tr("product.relatedTitle")}
-          </h2>
-          <div className="mt-8 grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-4">
-            {related.map((p, i) => (
-              <ProductCard key={p.slug} product={p} index={i} />
-            ))}
-          </div>
-        </section>
-      )}
-    </div>
-  );
+  const { Pdp } = getStorefront(themeRes.rendered.id);
+  return <Pdp data={presentation} tr={tr} fmt={fmt} />;
 }

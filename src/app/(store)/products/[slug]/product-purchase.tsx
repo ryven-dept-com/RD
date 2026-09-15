@@ -168,6 +168,17 @@ export function ProductPurchase(props: PurchaseProps) {
     router.push("/checkout");
   };
 
+  // Per-theme control shapes — identical logic, different instrument panel.
+  const { theme } = useStoreConfig();
+  const pt = {
+    noir: { chip: "rounded-sm", size: "rounded-sm", qty: "rounded-sm", cta: "rounded-sm" },
+    concrete: { chip: "rounded-none border-2", size: "rounded-none border-2", qty: "rounded-none border-2", cta: "rounded-none" },
+    district: { chip: "rounded-full", size: "rounded-lg", qty: "rounded-full", cta: "rounded-full" },
+    nightshift: { chip: "rounded-md", size: "rounded-md", qty: "rounded-md", cta: "rounded-full" },
+    archive: { chip: "rounded-full", size: "rounded-none", qty: "rounded-full", cta: "rounded-full" },
+    signature: { chip: "rounded-full", size: "rounded-full", qty: "rounded-full", cta: "rounded-full" },
+  }[theme] ?? { chip: "rounded-full", size: "rounded-lg", qty: "rounded-full", cta: "rounded-full" };
+
   return (
     <div className="space-y-6">
       {/* color */}
@@ -187,7 +198,7 @@ export function ProductPurchase(props: PurchaseProps) {
                   key={c}
                   onClick={() => available && handleColor(c)}
                   disabled={!available}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
+                  className={`${pt.chip} border px-4 py-2 text-sm font-medium transition-all ${
                     color === c
                       ? "border-ink bg-ink text-bone"
                       : available
@@ -221,7 +232,7 @@ export function ProductPurchase(props: PurchaseProps) {
                 key={s}
                 onClick={() => available && handleSize(s)}
                 disabled={!available}
-                className={`min-w-12 rounded-lg border px-3 py-2.5 text-sm font-medium transition-all ${
+                className={`min-w-12 ${pt.size} border px-3 py-2.5 text-sm font-medium transition-all ${
                   size === s
                     ? "border-ink bg-ink text-bone"
                     : available
@@ -243,7 +254,7 @@ export function ProductPurchase(props: PurchaseProps) {
 
       {/* qty + add */}
       <div className="flex items-stretch gap-3 pt-2">
-        <div className="flex items-center rounded-full border border-black/15">
+        <div className={`flex items-center ${pt.qty} border border-black/15`}>
           <button
             onClick={() => setQty((q) => Math.max(1, q - 1))}
             className="flex h-12 w-12 items-center justify-center transition-opacity hover:opacity-60 disabled:opacity-30"
@@ -268,7 +279,7 @@ export function ProductPurchase(props: PurchaseProps) {
         <button
           onClick={handleBuyNow}
           disabled={!canBuy}
-          className={`rd-atc rd-cta group flex flex-1 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold uppercase tracking-widest transition-transform ${
+          className={`rd-atc rd-cta group flex flex-1 items-center justify-center gap-2 ${pt.cta} px-6 text-sm font-semibold uppercase tracking-widest transition-transform ${
             canBuy
               ? "bg-ink text-bone hover:scale-[1.02]"
               : "cursor-not-allowed bg-black/10 text-black/40"

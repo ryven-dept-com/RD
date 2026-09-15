@@ -18,8 +18,60 @@ export function CartDrawer() {
     subtotal,
     count,
   } = useCart();
-  const { formatPrice, freeShippingThreshold } = useStoreConfig();
+  const { formatPrice, freeShippingThreshold, theme } = useStoreConfig();
   const t = useT();
+
+  // Per-theme cart identity — same business behavior, six presentations.
+  const cartTheme = {
+    noir: {
+      panel: "rounded-none",
+      head: "font-display uppercase tracking-wide",
+      rows: "divide-y divide-black/10",
+      thumb: "rounded-md",
+      qty: "rounded-full border border-black/15",
+    },
+    concrete: {
+      panel: "rounded-none border-s-2 border-ink",
+      head: "font-display font-bold uppercase tracking-[0.1em]",
+      rows: "divide-y-2 divide-ink",
+      thumb: "rounded-none border-2 border-ink",
+      qty: "rounded-none border-2 border-ink",
+    },
+    district: {
+      panel: "",
+      head: "font-display uppercase tracking-wide",
+      rows: "divide-y divide-black/10",
+      thumb: "rounded-lg",
+      qty: "rounded-full border border-black/15",
+    },
+    nightshift: {
+      panel: "border-s border-brand-100",
+      head: "font-display uppercase tracking-[0.2em]",
+      rows: "divide-y divide-black/10",
+      thumb: "rounded-md border border-brand-100",
+      qty: "rounded-full border border-black/15",
+    },
+    archive: {
+      panel: "",
+      head: "font-display font-medium",
+      rows: "divide-y divide-black/15",
+      thumb: "rounded-none border border-black/25",
+      qty: "rounded-full border border-black/15",
+    },
+    signature: {
+      panel: "",
+      head: "font-display font-normal tracking-[0.15em]",
+      rows: "divide-y divide-black/10",
+      thumb: "rounded-sm",
+      qty: "rounded-full border border-black/15",
+    },
+  }[theme] ?? {
+    panel: "",
+    head: "font-display uppercase tracking-wide",
+    rows: "divide-y divide-black/10",
+    thumb: "rounded-lg",
+    qty: "rounded-full border border-black/15",
+  };
 
   // The threshold setting is whole DZD; the cart subtotal is integer cents
   // — convert once so the progress bar compares like-for-like amounts.
@@ -42,14 +94,14 @@ export function CartDrawer() {
 
       {/* panel */}
       <aside
-        className={`absolute end-0 top-0 flex h-full w-full max-w-md flex-col bg-bone text-ink shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute end-0 top-0 flex h-full w-full max-w-md flex-col bg-bone text-ink shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${cartTheme.panel} ${
           isOpen ? "translate-x-0" : "ltr:translate-x-full rtl:-translate-x-full"
         }`}
         role="dialog"
         aria-label={t("cart.title")}
       >
         <div className="flex items-center justify-between border-b border-black/10 px-5 py-4">
-          <h2 className="font-display text-lg uppercase tracking-wide">
+          <h2 className={`text-lg ${cartTheme.head}`}>
             {t("cart.title")}{" "}
             <span className="text-sm font-sans text-black/40">({count})</span>
           </h2>
@@ -100,13 +152,13 @@ export function CartDrawer() {
               </p>
               <button
                 onClick={closeCart}
-                className="mt-2 rounded-full bg-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.03]"
+                className="rd-cta mt-2 rounded-full bg-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.03]"
               >
                 {t("cart.startShopping")}
               </button>
             </div>
           ) : (
-            <ul className="divide-y divide-black/10">
+            <ul className={cartTheme.rows}>
               {items.map((item) => {
                 const key = lineKey(item);
                 return (
@@ -114,7 +166,7 @@ export function CartDrawer() {
                     <Link
                       href={`/products/${item.slug}`}
                       onClick={closeCart}
-                      className="relative h-28 w-20 shrink-0 overflow-hidden rounded-lg bg-black/5"
+                      className={`relative h-28 w-20 shrink-0 overflow-hidden bg-black/5 ${cartTheme.thumb}`}
                     >
                       {item.image ? (
                         <Image
@@ -144,7 +196,7 @@ export function CartDrawer() {
                       </p>
 
                       <div className="mt-auto flex items-center justify-between pt-2">
-                        <div className="flex items-center rounded-full border border-black/15">
+                        <div className={`flex items-center ${cartTheme.qty}`}>
                           <button
                             onClick={() =>
                               setQuantity(key, item.quantity - 1)
@@ -199,7 +251,7 @@ export function CartDrawer() {
             <Link
               href="/checkout"
               onClick={closeCart}
-              className="group mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-ink py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.02]"
+              className="rd-cta group mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-ink py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.02]"
             >
               {t("cart.checkout")}
               <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />
