@@ -62,7 +62,7 @@ export function NoirShop({ data, tr, fmt }: ShopProps) {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-x-5 gap-y-12 sm:grid-cols-2">
+          <div className="rd-shop-products grid grid-cols-1 gap-x-5 gap-y-12 sm:grid-cols-2">
             {products.map((p, i) => (
               <NoirCard key={p.slug} product={p} tr={tr} fmt={fmt} index={i} priority={i < 2} />
             ))}

@@ -33,12 +33,39 @@ export type ShopFilterOptions = {
   collections: string[];
 };
 
+
+/**
+ * Storefront Builder shop settings (server-rendered as a data attribute on
+ * the theme wrapper — zero extra requests). Defaults = theme behavior when
+ * the builder has no published configuration.
+ */
+type SbShopCfg = { showSearch?: boolean; showSort?: boolean; showFilters?: boolean };
+function useSbShop(): { showSearch: boolean; showSort: boolean; showFilters: boolean } {
+  // The attribute is server-rendered by the layout, so a lazy initializer
+  // (client-only read) is hydration-safe and needs no effect.
+  const [cfg] = useState<SbShopCfg>(() => {
+    if (typeof document === "undefined") return {};
+    try {
+      return JSON.parse(document.querySelector("[data-sb-shop]")?.getAttribute("data-sb-shop") ?? "{}") as SbShopCfg;
+    } catch {
+      return {};
+    }
+  });
+  return {
+    showSearch: cfg.showSearch !== false,
+    showSort: cfg.showSort !== false,
+    showFilters: cfg.showFilters !== false,
+  };
+}
+
 export function SortSelect({ resultCount }: { resultCount: number }) {
+  const sb = useSbShop();
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
   const t = useT();
   const current = params.get("sort") ?? "featured";
+  if (!sb.showSort) return null;
 
   const onChange = (value: string) => {
     const next = new URLSearchParams(params.toString());
@@ -91,6 +118,9 @@ export function SearchBar({
   const params = useSearchParams();
   const t = useT();
   const [value, setValue] = useState(params.get("q") ?? "");
+
+  const sbShop = useSbShop();
+  if (!targetPath && !sbShop.showSearch) return null;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -334,6 +364,8 @@ function FilterBody({
 }
 
 export function DesktopFilters({ options }: { options: ShopFilterOptions }) {
+  const sb = useSbShop();
+  if (!sb.showFilters) return null;
   return (
     <aside className="hidden w-56 shrink-0 lg:block">
       <div className="sticky top-24">
@@ -344,8 +376,10 @@ export function DesktopFilters({ options }: { options: ShopFilterOptions }) {
 }
 
 export function MobileFilters({ options }: { options: ShopFilterOptions }) {
+  const sb = useSbShop();
   const [open, setOpen] = useState(false);
   const t = useT();
+  if (!sb.showFilters) return null;
   return (
     <>
       <button

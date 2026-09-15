@@ -127,12 +127,39 @@ export default async function StoreLayout({
     console.error("[store-layout] store config fallback:", err);
   }
 
+  // Storefront Builder: published chrome/page settings (preview draft wins
+  // inside a validated admin session). Data-level only — no client JS.
+  let sbFooter: { groupOrder: string[]; showNewsletter: boolean; showContact: boolean; showSocial: boolean } | null = null;
+  let sbShop: { cols: number; colsMobile: number; showSearch: boolean; showSort: boolean; showFilters: boolean } | null = null;
+  let sbPdp: { stickyGallery: boolean; relatedCols: number } | null = null;
+  let sbCart: { showFreeShipNote: boolean } | null = null;
+  try {
+    const { getBuilderStore } = await import("@/lib/builder/storage");
+    const { getBuilderPreviewDoc, BUILDER_PREVIEW_PARAM } = await import("@/lib/builder/preview");
+    const [sbStore, sbToken] = await Promise.all([
+      getBuilderStore(),
+      cookies().then((c) => c.get(BUILDER_PREVIEW_PARAM)?.value ?? null).catch(() => null),
+    ]);
+    const sbDoc = getBuilderPreviewDoc(sbToken ?? undefined) ?? sbStore.published;
+    if (sbDoc) {
+      sbFooter = sbDoc.footer;
+      sbShop = sbDoc.shop;
+      sbPdp = sbDoc.pdp;
+      sbCart = sbDoc.cart;
+    }
+  } catch {
+    // builder inactive
+  }
+
   return (
     <StoreConfigProvider config={config}>
       <MetaPixel />
       <CartProvider>
         <div
           data-theme={rendered.id}
+          data-sb-shop={sbShop ? JSON.stringify(sbShop) : undefined}
+          data-sb-pdp={sbPdp ? JSON.stringify(sbPdp) : undefined}
+          data-sb-cart={sbCart ? JSON.stringify(sbCart) : undefined}
           className={preview ? "rd-has-preview min-h-dvh bg-bone text-ink" : "min-h-dvh bg-bone text-ink"}
         >
           {/* Per-storefront admin overrides (fonts + colors). Server-rendered
@@ -171,12 +198,30 @@ export default async function StoreLayout({
                 name: config.storeName || "RUVEN DEPT",
               }),
             };
+            const fbContent = sbFooter
+              ? {
+                  ...footerContent,
+                  socialLinks: sbFooter.showSocial ? socialLinks : [],
+                  showContact: sbFooter.showContact && footerContent.showContact,
+                  linkGroups: (() => {
+                    const byTitle = new Map(footerContent.linkGroups.map((g) => [g.title, g]));
+                    const ordered = sbFooter.groupOrder
+                      .map((t) => byTitle.get(t))
+                      .filter(Boolean) as typeof footerContent.linkGroups;
+                    const rest = footerContent.linkGroups.filter((g) => !sbFooter.groupOrder.includes(g.title));
+                    return [...ordered, ...rest];
+                  })(),
+                }
+              : { ...footerContent, socialLinks };
+            const fbNewsletter = sbFooter && !sbFooter.showNewsletter
+              ? { ...newsletterContent, enabled: false }
+              : newsletterContent;
             return (
               <FooterView
                 data={{
-                  content: { ...footerContent, socialLinks },
-                  newsletter: newsletterContent,
-                  contact,
+                  content: fbContent,
+                  newsletter: fbNewsletter,
+                  contact: sbFooter && !sbFooter.showContact ? { email: "", phone: "", address: "" } : contact,
                   storeName: config.storeName,
                   strings,
                 }}

@@ -16,6 +16,8 @@ const NAV = [
   { label: "Content", href: "/admin/content", icon: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" },
   { label: "Marketing", href: "/admin/marketing", icon: "M3 10v4a1 1 0 001 1h2l1 5h2l-1-5h2l9 4V5l-9 4H4a1 1 0 00-1 1z" },
   { label: "Themes", href: "/admin/themes", icon: "M3 5h18v4H3zM3 11h8v8H3zM13 11h8v8h-8z" },
+  { label: "Builder", href: "/admin/builder", icon: "M4 5h16v3H4zM4 10h7v9H4zM13 10h7v4h-7zM13 16h7v3h-7z" },
+  { label: "Health", href: "/admin/storefront/health", icon: "M12 21s-7-4.6-9.5-9A5.5 5.5 0 0112 6a5.5 5.5 0 019.5 6c-2.5 4.4-9.5 9-9.5 9zM8 12h2l1.5-3 2 5L15 12h2" },
   { label: "Analytics", href: "/admin/analytics", icon: "M4 20v-7M10 20V6M16 20v-10M2 20h20" },
   { label: "Settings", href: "/admin/settings", icon: "M12 15a3 3 0 100-6 3 3 0 000 6zM19 12a7 7 0 00-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 00-1.7-1L14.5 2h-4l-.3 3a7 7 0 00-1.7 1l-2.4-1-2 3.4L4 11a7 7 0 000 2l-2 1.6 2 3.4 2.4-1a7 7 0 001.7 1l.3 3h4l.3-3a7 7 0 001.7-1l2.4 1 2-3.4-2-1.6a7 7 0 00.1-1z" },
 ];

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { lineKey, useCart } from "@/context/cart-context";
@@ -87,6 +88,17 @@ export function CartDrawer() {
     qty: "rounded-full border border-black/15",
   };
 
+  // Storefront Builder cart setting (server-rendered attribute; default =
+  // show the note). Lazy client-only read → hydration-safe.
+  const [sbCart] = useState<{ showFreeShipNote?: boolean }>(() => {
+    if (typeof document === "undefined") return {};
+    try {
+      return JSON.parse(document.querySelector("[data-sb-cart]")?.getAttribute("data-sb-cart") ?? "{}") as { showFreeShipNote?: boolean };
+    } catch {
+      return {};
+    }
+  });
+
   // The threshold setting is whole DZD; the cart subtotal is integer cents
   // — convert once so the progress bar compares like-for-like amounts.
   const thresholdCents = freeShippingThreshold * 100;
@@ -128,8 +140,8 @@ export function CartDrawer() {
           </button>
         </div>
 
-        {/* free shipping bar */}
-        {items.length > 0 && (
+        {/* free shipping bar (builder can hide it) */}
+        {items.length > 0 && sbCart.showFreeShipNote !== false && (
           <div className="border-b border-black/10 px-5 py-3">
             <p className="flex items-center gap-2 text-xs text-black/70">
               <TruckIcon className="h-4 w-4" />

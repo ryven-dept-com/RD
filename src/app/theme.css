@@ -1017,3 +1017,43 @@ body:has([data-theme="atelier"]) { background-color: #f6f4ef; }
 
 /* RTL: Arabic display face takes over headings; dots stay inline-end */
 [dir="rtl"] [data-theme="atelier"] .rd-hero--lookbook h1 { line-height: 1.12; }
+
+/* ----------------------------------------------------------------------------
+   13. STOREFRONT BUILDER — structural rendering hooks
+   Sections paint with theme tokens; the builder only adds structure-level
+   variables (order, veil, overlay, font override). Safe by construction:
+   every value comes from server-sanitized enums/clamps.
+   -------------------------------------------------------------------------- */
+.sb-home { display: flex; flex-direction: column; overflow-x: clip; }
+.sb-sec { max-width: 100%; min-width: 0; }
+.sb-sec img { max-width: 100%; }
+@media (max-width: 767px) {
+  .sb-sec { order: var(--sb-order, 0); }
+}
+.sb-sec .font-display { font-family: var(--sb-font, var(--rd-font-display)); }
+.sb-veil {
+  background:
+    linear-gradient(color-mix(in oklab, var(--sb-overlay, #0a0908) calc(var(--sb-overlay-o, 0.3) * 100%), transparent), transparent),
+    linear-gradient(to top, rgb(10 9 8 / 0.62), rgb(10 9 8 / 0.18) 55%, rgb(10 9 8 / 0.08));
+}
+.sb-img-overlay {
+  background: color-mix(in oklab, var(--sb-overlay, #000) calc(var(--sb-overlay-o, 0.3) * 100%), transparent);
+}
+.sb-rail::-webkit-scrollbar { display: none; }
+@media (max-width: 767px) {
+  .sb-sec[data-sb-malign="center"] { text-align: center; }
+  .sb-sec[data-sb-malign="start"] { text-align: start; }
+  .sb-sec[data-sb-malign="end"] { text-align: end; }
+}
+
+/* builder shop grid overrides (attribute carries sanitized JSON) */
+@media (min-width: 768px) {
+  [data-sb-shop*='"cols":2'] .rd-shop-products { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-sb-shop*='"cols":4'] .rd-shop-products { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  [data-sb-shop*='"colsMobile":1'] .rd-shop-products { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+}
+[data-sb-shop*='"gap":"sm"'] .rd-shop-products { gap: 0.75rem; }
+[data-sb-shop*='"gap":"lg"'] .rd-shop-products { gap: 2rem; }
+[data-sb-pdp*='"stickyGallery":false'] .lg\:sticky { position: static !important; top: auto !important; }

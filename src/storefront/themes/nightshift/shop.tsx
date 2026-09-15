@@ -59,7 +59,7 @@ export function NightshiftShop({ data, tr, fmt }: ShopProps) {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 xl:grid-cols-4">
+            <div className="rd-shop-products grid grid-cols-2 gap-x-4 gap-y-8 md:grid-cols-3 xl:grid-cols-4">
               {products.map((p, i) => (
                 <NightshiftCard key={p.slug} product={p} tr={tr} fmt={fmt} index={i} priority={i < 4} />
               ))}

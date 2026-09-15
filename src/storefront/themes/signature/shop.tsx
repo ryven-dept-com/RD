@@ -54,7 +54,7 @@ export function SignatureShop({ data, tr, fmt }: ShopProps) {
             </Link>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-16 lg:grid-cols-3">
+          <div className="rd-shop-products grid grid-cols-2 gap-x-6 gap-y-16 lg:grid-cols-3">
             {products.map((p, i) => (
               <SignatureCard key={p.slug} product={p} tr={tr} fmt={fmt} index={i} priority={i < 3} />
             ))}

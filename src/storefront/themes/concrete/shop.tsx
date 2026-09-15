@@ -68,7 +68,7 @@ export function ConcreteShop({ data, tr, fmt }: ShopProps) {
               </Link>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <div className="rd-shop-products grid grid-cols-2 gap-3 md:grid-cols-3">
               {products.map((p, i) => (
                 <ConcreteCard key={p.slug} product={p} tr={tr} fmt={fmt} index={i} priority={i < 3} />
               ))}

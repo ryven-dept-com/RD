@@ -94,7 +94,24 @@ const NAV_THEME = {
   },
 } as const;
 
-export function NavbarClient({ links }: { links: NavLink[] }) {
+export type HeaderCfg = {
+  logoPosition: "start" | "center";
+  logoSize: "sm" | "md" | "lg";
+  navPosition: "start" | "center" | "end";
+  navOrder: string[];
+  height: "sm" | "md" | "lg";
+  sticky: boolean;
+  transparentOverHero: boolean;
+  showSearch: boolean;
+  showCart: boolean;
+  showLanguage: boolean;
+  showAnnouncement: boolean;
+};
+
+const HEADER_HEIGHT = { sm: "h-14", md: "h-16", lg: "h-20" } as const;
+const LOGO_IMG = { sm: "h-6 sm:h-7", md: "h-7 w-auto object-contain sm:h-8", lg: "h-9 sm:h-10" } as const;
+
+export function NavbarClient({ links, cfg }: { links: NavLink[]; cfg?: HeaderCfg | null }) {
   const { count, openCart } = useCart();
   const { logoUrl, storeName, theme } = useStoreConfig();
   const navTheme = NAV_THEME[theme] ?? NAV_THEME.district;
@@ -118,18 +135,21 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
   }, []);
 
   const onHome = pathname === "/";
-  // transparent over hero only at top of home page
-  const transparent = onHome && !scrolled && !mobileOpen;
+  // transparent over hero only at top of home page (builder can disable it)
+  const transparent =
+    (cfg ? cfg.transparentOverHero : true) && onHome && !scrolled && !mobileOpen;
+  const heightCls = HEADER_HEIGHT[cfg?.height ?? "md"];
+  const logoImgCls = LOGO_IMG[cfg?.logoSize ?? "md"];
 
   return (
     <header
-      className={`rd-store-header fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
+      className={`rd-store-header ${cfg && !cfg.sticky ? "absolute" : "fixed"} inset-x-0 top-0 z-50 transition-all duration-300 ${
         transparent
           ? "rd-nav-over-hero bg-transparent text-bone"
           : "rd-header-solid bg-bone/90 text-ink backdrop-blur-md border-b border-black/10"
       }`}
     >
-      <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+      <nav className={`mx-auto flex ${heightCls} max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8`}>
         <div className="flex items-center gap-8">
           <button
             className="-ms-2 flex h-11 w-11 items-center justify-center lg:hidden"
@@ -145,13 +165,17 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
             )}
           </button>
 
-          <Link href="/" className="flex items-baseline gap-1.5" onClick={menu.close}>
+          <Link
+            href="/"
+            onClick={menu.close}
+            className={`flex items-baseline gap-1.5 ${cfg?.logoPosition === "center" ? "absolute left-1/2 -translate-x-1/2" : ""}`}
+          >
             {logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={logoUrl}
                 alt={storeName}
-                className="h-7 w-auto object-contain sm:h-8"
+                className={logoImgCls}
               />
             ) : (
               <>
@@ -161,7 +185,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
             )}
           </Link>
 
-          <ul className={`hidden items-center gap-6 lg:flex ${navTheme.links}`}>
+          <ul className={`hidden items-center gap-6 lg:flex ${navTheme.links} ${cfg?.navPosition === "center" ? "absolute left-1/2 -translate-x-1/2" : cfg?.navPosition === "end" ? "ms-auto" : ""}`}>
             {links.map((l) => (
               <li key={l.href}>
                 <Link
@@ -176,15 +200,20 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
-          <Link
-            href="/shop"
-            className="hidden text-[13px] font-medium uppercase tracking-wide transition-opacity hover:opacity-60 sm:block"
-          >
-            {t("nav.search")}
-          </Link>
-          <div className="hidden sm:block">
-            <LanguageSwitcher compact />
-          </div>
+          {cfg?.showSearch === false ? null : (
+            <Link
+              href="/shop"
+              className="hidden text-[13px] font-medium uppercase tracking-wide transition-opacity hover:opacity-60 sm:block"
+            >
+              {t("nav.search")}
+            </Link>
+          )}
+          {cfg?.showLanguage === false ? null : (
+            <div className="hidden sm:block">
+              <LanguageSwitcher compact />
+            </div>
+          )}
+          {cfg?.showCart === false ? null : (
           <button
             onClick={openCart}
             className="relative flex h-11 w-11 items-center justify-center rounded-full transition-opacity hover:opacity-70"
@@ -199,6 +228,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
               {count}
             </span>
           </button>
+          )}
         </div>
       </nav>
 

@@ -48,6 +48,7 @@ type Dictionary = Record<string, string>;
 
 const en: Dictionary = {
   // Navigation
+  "nav.home": "Home",
   "nav.new": "New",
   "nav.shopAll": "Shop All",
   "nav.search": "Search",
@@ -249,6 +250,7 @@ const en: Dictionary = {
 
 const fr: Dictionary = {
   // Navigation
+  "nav.home": "Accueil",
   "nav.new": "Nouveautés",
   "nav.shopAll": "Tout voir",
   "nav.search": "Rechercher",
@@ -450,6 +452,7 @@ const fr: Dictionary = {
 
 const ar: Dictionary = {
   // Navigation
+  "nav.home": "الرئيسية",
   "nav.new": "جديد",
   "nav.shopAll": "تسوّق الكل",
   "nav.search": "بحث",
