@@ -57,9 +57,9 @@ export function ArchiveCard({
       {/* ledger caption */}
       <div className="mt-3 border-b border-black/15 px-0.5 pb-3">
         <p className="text-[10px] uppercase tracking-[0.3em] text-black/40">{product.category}</p>
-        <h3 className="mt-1 font-display text-lg font-medium leading-snug">{product.name}</h3>
+        <h3 className="rd-card-title mt-1 font-display text-lg font-medium leading-snug">{product.name}</h3>
         <div className="mt-1.5 flex items-baseline justify-between">
-          <span className="text-sm font-semibold tabular-nums">{fmt(product.price)}</span>
+          <span className="rd-price text-sm font-semibold tabular-nums">{fmt(product.price)}</span>
           {onSale ? (
             <span className="text-xs text-black/35 line-through tabular-nums">{fmt(product.compareAtPrice!)}</span>
           ) : (

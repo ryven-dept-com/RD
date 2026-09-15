@@ -18,6 +18,25 @@
    1. THEME TOKENS
    -------------------------------------------------------------------------- */
 
+/* --- CUSTOMIZATION BASE ----------------------------------------------------
+   Defaults for the admin-customizable tokens. Every value reproduces the
+   current design exactly; an admin override (rendered later in the cascade
+   by the server) wins without touching anything else. */
+[data-theme] {
+  --rd-btn-bg: var(--rd-ink);
+  --rd-btn-text: var(--rd-bone);
+  --rd-border: var(--rd-ink);
+  --rd-card-bg: transparent;
+  --rd-header-bg: var(--rd-bone);
+  --rd-footer-bg: var(--rd-panel);
+  --rd-ticker-bg: var(--rd-panel);
+  --rd-ticker-fg: var(--rd-panel-fg);
+  --rd-font-nav: var(--rd-font-sans);
+  --rd-font-button: var(--rd-font-sans);
+  --rd-font-card: var(--rd-font-sans);
+  --rd-font-price: var(--rd-font-sans);
+}
+
 /* --- 01 NOIR DEPT — dark luxury, almost-black, editorial gold ------------- */
 [data-theme="noir"] {
   color-scheme: dark;
@@ -38,6 +57,11 @@
   --rd-panel-fg: #f2efe8;
   --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --rd-font-display: var(--font-anton), "Arial Narrow", sans-serif;
+
+  --rd-hero-overlay: 10 10 11;
+  --rd-font-ar-display: var(--font-cairo), Tahoma, sans-serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
+  --rd-card-bg: var(--rd-brand-100);
 }
 
 /* --- 02 RAW CONCRETE — industrial brutalist, hard borders, signal orange -- */
@@ -59,6 +83,12 @@
   --rd-panel-fg: #d8d6d1;
   --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --rd-font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
+
+  --rd-hero-overlay: 17 17 19;
+  --rd-font-card: var(--rd-font-display);
+  --rd-font-ar-display: var(--font-cairo), Tahoma, sans-serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
+  --rd-card-bg: var(--rd-brand-100);
 }
 
 /* --- 03 DISTRICT — the house look: clean urban editorial ------------------ */
@@ -80,6 +110,11 @@
   --rd-panel-fg: #f4f1ea;
   --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --rd-font-display: var(--font-anton), "Arial Narrow", sans-serif;
+
+  --rd-hero-overlay: 10 10 11;
+  --rd-font-ar-display: var(--font-cairo), Tahoma, sans-serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
+  --rd-card-bg: var(--rd-brand-100);
 }
 
 /* --- 04 NIGHT SHIFT — dark cinematic, controlled electric glow ------------ */
@@ -103,6 +138,11 @@
   --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --rd-font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
   --rd-glow: 109, 224, 200;
+
+  --rd-hero-overlay: 7 8 13;
+  --rd-card-bg: #0d0f16;
+  --rd-font-ar-display: var(--font-cairo), Tahoma, sans-serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
 }
 
 /* --- 05 ARCHIVE — cream paper, ledger rules, editorial serif -------------- */
@@ -124,6 +164,15 @@
   --rd-panel-fg: #efe8da;
   --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --rd-font-display: var(--font-fraunces), Georgia, serif;
+
+  --rd-hero-overlay: 239 232 218;
+  --rd-card-bg: #f3eee1;
+  --rd-font-card: var(--rd-font-display);
+  --rd-font-ar-display: var(--font-amiri), "Times New Roman", serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
+  --rd-footer-bg: var(--rd-bone);
+  --rd-ticker-bg: var(--rd-brand-50);
+  --rd-ticker-fg: var(--rd-ink);
 }
 
 /* --- 06 SIGNATURE — ultra-premium minimal, massive whitespace -------------- */
@@ -145,6 +194,42 @@
   --rd-panel-fg: #fbfaf7;
   --rd-font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --rd-font-display: var(--font-fraunces), Georgia, serif;
+
+  --rd-hero-overlay: 251 250 247;
+  --rd-font-ar-display: var(--font-amiri), "Times New Roman", serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
+  --rd-card-bg: var(--rd-brand-100);
+  --rd-footer-bg: var(--rd-bone);
+  --rd-ticker-bg: transparent;
+  --rd-ticker-fg: var(--rd-ink);
+}
+
+
+/* --- 07 BLOCK SEVEN — pop-brutalist drop culture ------------------------- */
+[data-theme="seventh"] {
+  --rd-ink: #101014;
+  --rd-ink-soft: #1b1b22;
+  --rd-bone: #f2efe6;
+  --rd-sand: #dcd6c6;
+  --rd-clay: #6f6a5c;
+  --rd-amber: #1d3fd6; /* electric cobalt = the label's signal */
+  --rd-olive: #ff5a1f; /* safety orange = the counter-signal */
+  --rd-brand-50: #ffffff;
+  --rd-brand-100: #e8e4d8;
+  --rd-brand-400: #55504a;
+  --rd-brand-500: #33302c;
+  --rd-brand-900: #0c0c0f;
+  --rd-panel: #101014;
+  --rd-panel-soft: #1b1b22;
+  --rd-panel-fg: #f2efe6;
+  --rd-font-sans: var(--font-work-sans), var(--font-inter), sans-serif;
+  --rd-font-display: var(--font-archivo-black), Arial, sans-serif;
+  --rd-hero-overlay: 242 239 230;
+  --rd-card-bg: #ffffff;
+  --rd-ticker-bg: #ff5a1f;
+  --rd-ticker-fg: #101014;
+  --rd-font-ar-display: var(--font-cairo), Tahoma, sans-serif;
+  --rd-font-ar-body: var(--font-tajawal), Tahoma, sans-serif;
 }
 
 /* ----------------------------------------------------------------------------
@@ -304,8 +389,9 @@
   justify-content: center;
   flex-wrap: wrap;
   gap: 0.75rem;
-  block-size: 2.25rem;
+  min-block-size: 2.25rem;
   padding-inline: 1rem;
+  padding-block: 0.25rem;
   background: #111113;
   color: #f4f1ea;
   font-size: 12px;
@@ -320,6 +406,7 @@
 /* the fixed navbar and pages that pad under it account for the banner */
 .rd-has-preview header.fixed { top: 2.25rem; }
 .rd-has-preview .rd-needs-offset { padding-block-start: 6.25rem; }
+.rd-has-preview .rd-mobile-menu { max-height: calc(100svh - 6.25rem); }
 
 /* ----------------------------------------------------------------------------
    5. PER-THEME STRUCTURAL DESIGN
@@ -349,7 +436,10 @@
   vertical-align: middle;
 }
 [data-theme="noir"] .rd-hero--cinematic .rd-hero-veil-a {
-  background: linear-gradient(to top, rgba(10, 10, 11, 0.94), rgba(10, 10, 11, 0.25) 55%, rgba(10, 10, 11, 0.45));
+  background: linear-gradient(to top,
+    rgb(var(--rd-hero-overlay) / 0.94),
+    rgb(var(--rd-hero-overlay) / 0.25) 55%,
+    rgb(var(--rd-hero-overlay) / 0.45));
 }
 /* editorial section rhythm: oversized headings, generous leading */
 [data-theme="noir"] h2.font-display {
@@ -455,7 +545,10 @@
 }
 [data-theme="archive"] .rd-hero--catalog .rd-hero-veil-a,
 [data-theme="archive"] .rd-hero--catalog .rd-hero-veil-b {
-  background: linear-gradient(to top, rgba(239, 232, 218, 0.96), rgba(239, 232, 218, 0.55) 45%, rgba(239, 232, 218, 0.2));
+  background: linear-gradient(to top,
+    rgb(var(--rd-hero-overlay) / 0.96),
+    rgb(var(--rd-hero-overlay) / 0.55) 45%,
+    rgb(var(--rd-hero-overlay) / 0.2));
 }
 [data-theme="archive"] .rd-hero--catalog img { filter: sepia(0.22) contrast(0.94) brightness(1.02); }
 [data-theme="archive"] .rd-hero--catalog h1 {
@@ -482,7 +575,7 @@
   border-radius: 2px;
   border: 1px solid color-mix(in oklab, var(--rd-ink) 55%, transparent);
   padding: 8px;
-  background: var(--rd-brand-50);
+  background: var(--rd-card-bg, var(--rd-brand-50));
 }
 [data-theme="archive"] .rd-card .rd-card-img img { border-radius: 0; }
 [data-theme="archive"] .rd-card h3 {
@@ -636,6 +729,7 @@ body:has([data-theme="nightshift"]) { background-color: #07080d; }
 body:has([data-theme="concrete"]) { background-color: #d8d6d1; }
 body:has([data-theme="archive"]) { background-color: #efe8da; }
 body:has([data-theme="signature"]) { background-color: #fbfaf7; }
+body:has([data-theme="seventh"]) { background-color: #f2efe6; }
 
 /* ----------------------------------------------------------------------------
    8. STOREFRONT COMPONENT ARCHITECTURE — per-theme component styling
@@ -692,7 +786,10 @@ body:has([data-theme="signature"]) { background-color: #fbfaf7; }
 
 /* --- SIGNATURE minimal hero veil (soft cream wash over imagery) ------------ */
 [data-theme="signature"] .rd-hero--minimal .rd-hero-veil-a {
-  background: linear-gradient(to top, rgba(251, 250, 247, 0.97), rgba(251, 250, 247, 0.55) 45%, rgba(251, 250, 247, 0.25));
+  background: linear-gradient(to top,
+    rgb(var(--rd-hero-overlay) / 0.97),
+    rgb(var(--rd-hero-overlay) / 0.55) 45%,
+    rgb(var(--rd-hero-overlay) / 0.25));
 }
 [data-theme="signature"] .rd-hero--minimal .rd-hero-veil-b { display: none; }
 
@@ -701,3 +798,133 @@ body:has([data-theme="signature"]) { background-color: #fbfaf7; }
 [data-theme="concrete"] .rd-needs-offset .rounded-2xl { border-radius: 0.375rem; }
 [data-theme="signature"] section { scroll-margin-top: 6rem; }
 
+/* ----------------------------------------------------------------------------
+   9. CUSTOMIZATION CONSUMPTION — how admin overrides reach the components.
+   Every rule here falls back to the theme defaults, so with zero overrides
+   the rendered design is unchanged.
+   -------------------------------------------------------------------------- */
+
+/* Primary commerce buttons (ATC / buy / cart CTAs) follow the button tokens.
+   :not(:disabled) keeps sold-out states gray; hero art-directed CTAs are
+   intentionally out of scope (they belong to each theme's composition). */
+[data-theme] .rd-atc:not(:disabled) {
+  background-color: var(--rd-btn-bg) !important;
+  color: var(--rd-btn-text) !important;
+  font-family: var(--rd-font-button, var(--rd-font-sans));
+}
+
+/* Sticky header surface */
+[data-theme] header.rd-header-solid {
+  background-color: color-mix(in srgb, var(--rd-header-bg, var(--rd-bone)) 92%, transparent);
+}
+
+/* Navigation voice (desktop links + mobile menu) */
+[data-theme] header nav ul {
+  font-family: var(--rd-font-nav, var(--rd-font-sans));
+}
+
+/* Footer + announcement ticker surfaces */
+[data-theme] footer.rd-footer { background-color: var(--rd-footer-bg, var(--rd-panel)); }
+[data-theme] .rd-ticker {
+  background-color: var(--rd-ticker-bg, var(--rd-panel));
+  color: var(--rd-ticker-fg, var(--rd-panel-fg));
+}
+
+/* Hard frames follow the border token (default = theme ink, unchanged look) */
+[data-theme] .border-ink { border-color: var(--rd-border, var(--rd-ink)); }
+[data-theme="concrete"] .rd-hero--brutalist { border-block-end-color: var(--rd-border, var(--rd-ink)); }
+
+/* Card surfaces + voices */
+[data-theme] .rd-card-title { font-family: var(--rd-font-card, var(--rd-font-sans)); }
+[data-theme] .rd-price { font-family: var(--rd-font-price, var(--rd-font-sans)); }
+[data-theme] .rd-card-frame { background-color: var(--rd-card-bg, transparent); }
+
+/* ----------------------------------------------------------------------------
+   10. ARABIC / RTL TYPOGRAPHY
+   Latin display faces don't carry Arabic glyphs — under RTL the storefront
+   switches to the theme's Arabic voices and drops tracking, which would
+   otherwise tear connected letterforms apart.
+   -------------------------------------------------------------------------- */
+
+[dir="rtl"] body {
+  font-family: var(--rd-font-ar-body, var(--font-tajawal), Tahoma, sans-serif);
+}
+[dir="rtl"] .font-display {
+  font-family: var(--rd-font-ar-display, var(--font-cairo), Tahoma, sans-serif);
+  letter-spacing: 0;
+}
+/* tracked-out chrome elements must relax completely in Arabic */
+[dir="rtl"] .rd-hero-eyebrow,
+[dir="rtl"] .rd-pdp-kicker,
+[dir="rtl"] .rd-ticker,
+[dir="rtl"] .rd-ticker-item,
+[dir="rtl"] header nav ul,
+[dir="rtl"] .rd-card-kicker,
+[dir="rtl"] .noir-card-kicker {
+  letter-spacing: 0;
+}
+/* the marquee strip scrolls the other way under RTL */
+[dir="rtl"] .animate-marquee { animation-direction: reverse; }
+
+/* Arabic display type needs roomier lines than condensed Latin caps */
+[dir="rtl"] h1.font-display,
+[dir="rtl"] h2.font-display,
+[dir="rtl"] h3.font-display {
+  line-height: 1.2;
+}
+/* ----------------------------------------------------------------------------
+   11. BLOCK SEVEN — pop-brutalist structural layer
+   (seventh storefront: hard shadows, sticker plates, poster typography)
+   -------------------------------------------------------------------------- */
+
+[data-theme="seventh"] .font-display { letter-spacing: 0; }
+/* hard offset shadows — the label's signature */
+[data-theme="seventh"] .sb-shadow { box-shadow: 6px 6px 0 var(--rd-ink); }
+[data-theme="seventh"] .sb-shadow-sm { box-shadow: 4px 4px 0 var(--rd-ink); }
+[data-theme="seventh"] .sb-card .sb-frame { transition: transform 0.25s ease, box-shadow 0.25s ease; }
+[data-theme="seventh"] .sb-card:hover .sb-frame {
+  transform: translate(-2px, -2px);
+  box-shadow: 8px 8px 0 var(--rd-ink);
+}
+/* rotated sticker plate */
+[data-theme="seventh"] .sb-sticker {
+  display: inline-block;
+  transform: rotate(-2deg);
+  border: 2px solid var(--rd-ink);
+  box-shadow: 3px 3px 0 var(--rd-ink);
+}
+/* poster outline wordmark (footer) */
+[data-theme="seventh"] .sb-outline {
+  color: transparent;
+  -webkit-text-stroke: 2px var(--rd-ink);
+}
+/* pop hero: bone stage, cobalt type block */
+[data-theme="seventh"] .rd-hero--pop { background: var(--rd-bone); color: var(--rd-ink); }
+[data-theme="seventh"] .rd-hero--pop h1 {
+  font-size: clamp(2.9rem, 10vw, 8.5rem);
+  line-height: 0.94;
+  letter-spacing: 0.01em;
+}
+[data-theme="seventh"] .rd-hero--pop .rd-hero-eyebrow {
+  color: var(--rd-olive);
+  letter-spacing: 0.3em;
+}
+[data-theme="seventh"] .rd-hero--pop .sb-frame img { filter: saturate(1.08) contrast(1.02); }
+/* buttons: squared, chunky, loud */
+[data-theme="seventh"] .rd-cta { border-radius: 0.25rem; letter-spacing: 0.1em; }
+[data-theme="seventh"] .rd-pdp .rd-gallery-frame {
+  border-radius: 0;
+  border: 3px solid var(--rd-ink);
+  background: var(--rd-card-bg, #fff);
+}
+[data-theme="seventh"] .rd-pdp h1 {
+  font-size: clamp(2rem, 5.5vw, 4rem);
+  line-height: 1;
+}
+[data-theme="seventh"] .rd-pdp .rd-pdp-kicker { color: var(--rd-amber); letter-spacing: 0.3em; }
+/* nav voice: poster caps */
+[data-theme="seventh"] header nav { letter-spacing: 0.04em; }
+[data-theme="seventh"] header nav ul { font-weight: 700; text-transform: uppercase; font-size: 0.8rem; }
+[data-theme="seventh"] .animate-fade-up { animation-duration: 0.45s; animation-timing-function: cubic-bezier(0.2, 0.9, 0.25, 1.2); }
+/* RTL: soften the rotated stickers so Arabic compositions stay calm */
+[dir="rtl"] [data-theme="seventh"] .sb-sticker { transform: rotate(2deg); }

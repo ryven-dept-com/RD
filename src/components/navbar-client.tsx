@@ -75,6 +75,14 @@ const NAV_THEME = {
       "block py-4 text-center text-xs font-medium uppercase tracking-[0.35em] hover:opacity-60",
     mobileWrap: "gap-0 divide-y divide-black/10",
   },
+  seventh: {
+    wordmark: "font-display text-xl uppercase sm:text-2xl",
+    dept: "bg-olive px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.15em] text-ink",
+    links: "text-[12px] font-bold uppercase tracking-[0.1em]",
+    mobileLink:
+      "block border-2 border-ink bg-brand-50 px-3 py-3 font-display text-sm uppercase tracking-[0.08em] hover:bg-olive",
+    mobileWrap: "gap-2",
+  },
 } as const;
 
 export function NavbarClient({ links }: { links: NavLink[] }) {
@@ -112,13 +120,13 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
       className={`fixed inset-x-0 top-0 z-50 transition-all duration-300 ${
         transparent
           ? "rd-nav-over-hero bg-transparent text-bone"
-          : "bg-bone/90 text-ink backdrop-blur-md border-b border-black/10"
+          : "rd-header-solid bg-bone/90 text-ink backdrop-blur-md border-b border-black/10"
       }`}
     >
       <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-8">
           <button
-            className="lg:hidden -ms-1 p-1"
+            className="-ms-2 flex h-11 w-11 items-center justify-center lg:hidden"
             onClick={() => setMobileOpen((o) => !o)}
             aria-label={t("nav.toggleMenu")}
           >
@@ -171,7 +179,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
           </div>
           <button
             onClick={openCart}
-            className="relative flex items-center gap-2 rounded-full px-1 py-1 transition-opacity hover:opacity-70"
+            className="relative flex h-11 w-11 items-center justify-center rounded-full transition-opacity hover:opacity-70"
             aria-label={t("nav.openCart")}
           >
             <BagIcon className="h-6 w-6" />
@@ -189,7 +197,7 @@ export function NavbarClient({ links }: { links: NavLink[] }) {
       {/* Mobile menu — search and language first, then navigation links.
           Scrollable when the content is taller than the viewport. */}
       <div
-        className={`border-t border-black/10 bg-bone text-ink transition-[max-height] duration-300 lg:hidden ${
+        className={`rd-mobile-menu border-t border-black/10 bg-bone text-ink transition-[max-height] duration-300 lg:hidden ${
           mobileOpen
             ? "max-h-[calc(100svh-4rem)] overflow-y-auto"
             : "max-h-0 overflow-hidden"

@@ -65,6 +65,13 @@ export function CartDrawer() {
       thumb: "rounded-sm",
       qty: "rounded-full border border-black/15",
     },
+    seventh: {
+      panel: "border-s-[3px] border-ink",
+      head: "font-display uppercase tracking-[0.02em]",
+      rows: "divide-y-2 divide-ink",
+      thumb: "rounded-none border-2 border-ink",
+      qty: "rounded-none border-2 border-ink",
+    },
   }[theme] ?? {
     panel: "",
     head: "font-display uppercase tracking-wide",
@@ -152,7 +159,7 @@ export function CartDrawer() {
               </p>
               <button
                 onClick={closeCart}
-                className="rd-cta mt-2 rounded-full bg-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.03]"
+                className="rd-atc rd-cta mt-2 rounded-full bg-ink px-6 py-3 text-xs font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.03]"
               >
                 {t("cart.startShopping")}
               </button>
@@ -251,7 +258,7 @@ export function CartDrawer() {
             <Link
               href="/checkout"
               onClick={closeCart}
-              className="rd-cta group mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-ink py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.02]"
+              className="rd-atc rd-cta group mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-ink py-4 text-sm font-semibold uppercase tracking-widest text-bone transition-transform hover:scale-[1.02]"
             >
               {t("cart.checkout")}
               <ArrowRightIcon className="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:group-hover:-translate-x-1" />

@@ -13,7 +13,7 @@ export function SignatureFooter({ data }: FooterProps) {
     content.showContact && Boolean(contact.email || contact.phone || contact.address);
 
   return (
-    <footer className="border-t border-black/10 bg-bone">
+    <footer className="rd-footer border-t border-black/10 bg-bone">
       <div className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6">
         <p className="font-display text-3xl font-normal tracking-tight">RUVEN DEPT</p>
         <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-black/50">{content.description}</p>

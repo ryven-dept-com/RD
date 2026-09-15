@@ -13,7 +13,7 @@ export function ConcreteFooter({ data }: FooterProps) {
     content.showContact && Boolean(contact.email || contact.phone || contact.address);
 
   return (
-    <footer className="rd-dark-panel border-t-2 border-ink bg-ink text-bone">
+    <footer className="rd-footer rd-dark-panel border-t-2 border-ink bg-ink text-bone">
       <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6 lg:px-8">
         <div className="grid border-2 border-bone/30 md:grid-cols-2 lg:grid-cols-4">
           {/* wordmark cell */}

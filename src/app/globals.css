@@ -59,6 +59,9 @@ html {
 body {
   font-family: var(--rd-font-sans);
   -webkit-font-smoothing: antialiased;
+  /* oversized display type and rails must never create a horizontal
+     scrollbar; clip (unlike hidden) keeps position:sticky functional */
+  overflow-x: clip;
 }
 
 .font-display {

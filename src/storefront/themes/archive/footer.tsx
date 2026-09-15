@@ -13,7 +13,7 @@ export function ArchiveFooter({ data }: FooterProps) {
     content.showContact && Boolean(contact.email || contact.phone || contact.address);
 
   return (
-    <footer className="border-t-2 border-ink bg-bone">
+    <footer className="rd-footer border-t-2 border-ink bg-bone">
       <div className="mx-4 border-b border-ink sm:mx-6 lg:mx-auto lg:max-w-7xl" aria-hidden />
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="grid gap-12 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">

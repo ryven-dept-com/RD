@@ -4,6 +4,11 @@ import { sql } from "drizzle-orm";
 import { db } from "@/db";
 import { settings } from "@/db/schema";
 import { memoizePerRequest } from "@/lib/cache";
+import {
+  sanitizeCustomization,
+  type ThemeCustomizationMap,
+} from "@/themes/customize";
+import { isThemeId } from "@/themes/types";
 
 // ---------------------------------------------------------------------------
 // Central settings service (Phase 3).
@@ -42,6 +47,10 @@ export const SETTING_DEFS: Record<string, SettingDef> = {
   codEnabled: { kind: "bool", defaultValue: "true", label: "Cash on Delivery" },
   freeShippingThreshold: { kind: "int", defaultValue: "5000", label: "Free shipping threshold" },
   activeTheme: { kind: "text", max: 30, defaultValue: "district", label: "Active storefront theme" },
+  // Per-storefront visual overrides (fonts + colors), stored as sanitized
+  // JSON — written only by the themes customization API after server-side
+  // validation. Presentation-only: never read by business logic.
+  themeCustomizations: { kind: "text", max: 20000, defaultValue: "{}", label: "Theme customizations" },
   minOrderAmount: { kind: "int", defaultValue: "0", label: "Minimum order amount" },
   requirePhone: { kind: "bool", defaultValue: "false", label: "Require phone" },
   requireAddress: { kind: "bool", defaultValue: "true", label: "Require address" },
@@ -277,6 +286,11 @@ export type StoreSettings = {
   freeShippingThreshold: number;
   /** Active storefront theme id (validated against the theme registry). */
   activeTheme: string;
+  /**
+   * Per-storefront typography/color overrides (presentation only). Always a
+   * sanitized map — corrupt or hostile JSON degrades to "no overrides".
+   */
+  themeCustomizations: ThemeCustomizationMap;
   minOrderAmount: number;
   requirePhone: boolean;
   requireAddress: boolean;
@@ -312,6 +326,31 @@ function int(map: Record<string, string>, key: string): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : Number(SETTING_DEFS[key].defaultValue);
 }
 
+
+/**
+ * Parse the stored theme-customization JSON defensively. Anything malformed,
+ * any unknown theme id, any invalid font/color value is dropped — the worst
+ * case is "theme renders with its defaults", never a broken storefront.
+ */
+function parseThemeCustomizations(raw: string | undefined): ThemeCustomizationMap {
+  const out: ThemeCustomizationMap = {};
+  if (!raw || !raw.trim()) return out;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return out;
+    for (const [themeId, cust] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!isThemeId(themeId)) continue;
+      const clean = sanitizeCustomization(cust);
+      if (Object.keys(clean.fonts).length || Object.keys(clean.colors).length) {
+        out[themeId] = clean;
+      }
+    }
+  } catch {
+    // corrupt JSON → no overrides
+  }
+  return out;
+}
+
 /**
  * Hot path: every public page renders against store settings (layout,
  * footer, checkout, product pages). Memoized per request so one page load
@@ -335,6 +374,7 @@ async function loadStoreSettings(): Promise<StoreSettings> {
     codEnabled: bool(map, "codEnabled"),
     freeShippingThreshold: int(map, "freeShippingThreshold"),
     activeTheme: str("activeTheme"),
+    themeCustomizations: parseThemeCustomizations(map.themeCustomizations),
     minOrderAmount: int(map, "minOrderAmount"),
     requirePhone: bool(map, "requirePhone"),
     requireAddress: bool(map, "requireAddress"),

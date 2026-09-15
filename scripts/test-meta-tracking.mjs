@@ -3671,8 +3671,8 @@ async function main() {
     check("D. anonymous theme list blocked", anonList.status === 401);
     const list = await (await jfetch(`${BASE}/api/admin/themes`, { headers: tHeaders })).json();
     check(
-      "E. admin sees 6 distinct production themes",
-      list.ok && list.themes.length === 6 && new Set(list.themes.map((t) => t.id)).size === 6,
+      "E. admin sees 7 distinct production themes",
+      list.ok && list.themes.length === 7 && new Set(list.themes.map((t) => t.id)).size === 7,
     );
     check("F. active theme reported", typeof list.activeTheme === "string" && list.activeTheme.length > 0);
 
@@ -3737,6 +3737,133 @@ async function main() {
     check("U. restore district via settings PATCH", restore.status === 200 && restore.body.ok !== false);
     const homeRestored = await (await jfetch(`${BASE}/`)).text();
     check("V. storefront back to district", homeRestored.includes('data-theme="district"'));
+  }
+
+  // -------------------------------------------------------------------------
+  // 21) Theme customization — per-storefront typography/colors, secure + scoped
+  // -------------------------------------------------------------------------
+  section("21) Theme customization — per-storefront typography & colors");
+  {
+    const tHeaders = {
+      "Content-Type": "application/json",
+      "x-csrf-token": auth.csrf,
+      cookie: auth.cookie,
+    };
+    const custUrl = `${BASE}/api/admin/themes/customizations`;
+
+    // security: anonymous can neither read nor write customizations
+    const anonGet = await jfetch(custUrl);
+    check("A. anonymous customization read blocked", anonGet.status === 401);
+    const anonPut = await jfetch(custUrl, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ themeId: "noir", customization: { colors: { accent: "#ff0000" } } }),
+    });
+    check("B. anonymous customization write blocked", anonPut.status === 401);
+
+    // validation: unknown themes, hostile fonts and colors are dropped
+    const badTheme = await jfetch(custUrl, {
+      method: "PUT", headers: tHeaders,
+      body: JSON.stringify({ themeId: "hacker", customization: {} }),
+    });
+    check("C. unknown theme rejected", badTheme.status === 400);
+    const sanitized = await (
+      await jfetch(custUrl, {
+        method: "PUT", headers: tHeaders,
+        body: JSON.stringify({
+          themeId: "noir",
+          customization: {
+            fonts: { display: "url(javascript:alert(1))", body: "manrope" },
+            colors: { accent: "</style><script>", text: "#123456", heroOverlay: "#0a0b0c" },
+          },
+        }),
+      })
+    ).json();
+    check(
+      "D. invalid fonts/colors sanitized, valid ones kept",
+      sanitized.ok &&
+        !sanitized.customization.fonts.display &&
+        sanitized.customization.fonts.body === "manrope" &&
+        !sanitized.customization.colors.accent &&
+        sanitized.customization.colors.text === "#123456" &&
+        sanitized.customization.colors.heroOverlay === "10 11 12",
+    );
+
+    // scoping: noir customized → storefront carries scoped vars; other themes untouched
+    const saveNoir = await jfetch(custUrl, {
+      method: "PUT", headers: tHeaders,
+      body: JSON.stringify({ themeId: "noir", customization: { fonts: { display: "bebas-neue" }, colors: { accent: "#c0ffee" } } }),
+    });
+    check("E. save noir customization", saveNoir.status === 200);
+
+    // activate noir: overrides render as scoped CSS for noir only
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "noir" }),
+    });
+    const homeNoirCust = await (await jfetch(`${BASE}/`)).text();
+    check(
+      "F. customized theme renders scoped overrides (font + color)",
+      homeNoirCust.includes("--rd-font-display") &&
+        homeNoirCust.includes("--font-bebas-neue") &&
+        homeNoirCust.includes("--rd-amber: #c0ffee"),
+    );
+
+    // switch to archive: noir's overrides must NOT leak
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "archive" }),
+    });
+    const homeArchive = await (await jfetch(`${BASE}/`)).text();
+    check("G. other storefronts unaffected by noir customization", !homeArchive.includes("#c0ffee"));
+
+    // preview shows saved customization of an INACTIVE theme
+    const pt = await (
+      await jfetch(`${BASE}/api/admin/themes/preview-token`, {
+        method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "noir" }),
+      })
+    ).json();
+    const gw = await jfetch(
+      `${BASE}/api/theme/preview?rd_theme=noir&token=${encodeURIComponent(pt.token)}&next=/`,
+      { redirect: "manual" },
+    );
+    const previewCookie = (gw.headers.get("set-cookie") || "").split(";")[0];
+    const previewed = await (await jfetch(`${BASE}/`, { headers: { cookie: previewCookie } })).text();
+    check(
+      "H. preview of customized inactive theme shows overrides + live-preview bridge",
+      previewed.includes("#c0ffee") && previewed.includes("rd-theme-live-overrides"),
+    );
+    const visitorHome = await (await jfetch(`${BASE}/`)).text();
+    check("I. visitors never receive the live-preview bridge", !visitorHome.includes("rd-theme-live-overrides"));
+
+    // reset: noir back to defaults, archive still customized-free
+    const reset = await jfetch(custUrl, {
+      method: "DELETE", headers: tHeaders, body: JSON.stringify({ themeId: "noir" }),
+    });
+    check("J. reset noir customization", reset.status === 200);
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "noir" }),
+    });
+    const homeNoirReset = await (await jfetch(`${BASE}/`)).text();
+    check("K. reset restores the original theme design", !homeNoirReset.includes("#c0ffee") && !homeNoirReset.includes("--font-bebas-neue"));
+
+    // seventh storefront exists end to end
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "seventh" }),
+    });
+    const homeSeventh = await (await jfetch(`${BASE}/`)).text();
+    const pdpSeventh = await (await jfetch(`${BASE}/products/apex-low-sneaker-bone`)).text();
+    check(
+      "L. seventh storefront (BLOCK SEVEN) renders home + PDP",
+      homeSeventh.includes('data-theme="seventh"') &&
+        homeSeventh.includes("sb-card") &&
+        pdpSeventh.includes("rd-pdp--drop") &&
+        pdpSeventh.includes('property="og:title"'),
+    );
+
+    // restore district + clean state
+    await jfetch(`${BASE}/api/admin/themes/activate`, {
+      method: "POST", headers: tHeaders, body: JSON.stringify({ themeId: "district" }),
+    });
+    const finalHome = await (await jfetch(`${BASE}/`)).text();
+    check("M. storefront restored to district", finalHome.includes('data-theme="district"'));
   }
 
   console.log(`\n\x1b[1mResults: ${passed} passed, ${failed} failed\x1b[0m`);

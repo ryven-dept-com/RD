@@ -30,7 +30,7 @@ export function DistrictCard({
       className="rd-card group block animate-fade-up"
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
     >
-      <div className="rd-card-img relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-100">
+      <div className="rd-card-img rd-card-frame relative aspect-[3/4] overflow-hidden rounded-xl bg-brand-100">
         <CardMedia images={product.images} name={product.name} priority={priority} />
         <CardBadges product={product} tr={tr} />
         {/* quick view hint (pointer devices) */}
@@ -51,9 +51,9 @@ export function DistrictCard({
             </span>
           )}
         </div>
-        <h3 className="mt-1 text-sm font-semibold leading-snug text-ink">{product.name}</h3>
+        <h3 className="rd-card-title mt-1 text-sm font-semibold leading-snug text-ink">{product.name}</h3>
         <div className="mt-1 flex items-center gap-2">
-          <span className="text-sm font-semibold tabular-nums">{fmt(product.price)}</span>
+          <span className="rd-price text-sm font-semibold tabular-nums">{fmt(product.price)}</span>
           {onSale && (
             <span className="text-xs text-black/35 line-through tabular-nums">
               {fmt(product.compareAtPrice!)}

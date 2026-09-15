@@ -30,7 +30,7 @@ export function ConcreteCard({
       style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}
     >
       {/* image bay */}
-      <div className="relative aspect-[3/4] overflow-hidden border-b-2 border-ink bg-brand-100">
+      <div className="rd-card-frame relative aspect-[3/4] overflow-hidden border-b-2 border-ink bg-brand-100">
         <CardMedia
           images={product.images}
           name={product.name}
@@ -67,11 +67,11 @@ export function ConcreteCard({
           <span className="truncate">{product.category}</span>
           <span className="shrink-0" aria-hidden>RD-{product.slug.slice(0, 4).toUpperCase()}</span>
         </div>
-        <h3 className="mt-1.5 font-display text-base uppercase leading-tight tracking-tight">
+        <h3 className="rd-card-title mt-1.5 font-display text-base uppercase leading-tight tracking-tight">
           {product.name}
         </h3>
         <div className="mt-2.5 flex items-center justify-between border-t-2 border-ink pt-2.5">
-          <span className="text-sm font-bold tabular-nums">{fmt(product.price)}</span>
+          <span className="rd-price text-sm font-bold tabular-nums">{fmt(product.price)}</span>
           {onSale ? (
             <span className="text-xs tabular-nums text-brand-400 line-through">
               {fmt(product.compareAtPrice!)}

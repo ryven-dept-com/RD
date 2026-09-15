@@ -17,10 +17,43 @@ import {
 import { getStoreSettings } from "@/lib/settings";
 import { resolveStorefrontTheme } from "@/lib/theme-server";
 import { getStorefront } from "@/storefront/registry";
+import { PreviewBridge } from "@/storefront/preview-bridge";
 import type { FooterStrings } from "@/storefront/types";
+import {
+  cssVarsToBlock,
+  customizationToCssVars,
+  isEmptyCustomization,
+  type ThemeCustomizationMap,
+} from "@/themes/customize";
 import { LOCALE_COOKIE, resolveLocale, translate } from "@/i18n/translations";
 import { cookies } from "next/headers";
 import "../theme.css";
+
+/**
+ * Render one storefront's saved customization as scoped CSS. Pure server
+ * component — no JS reaches the client. Values were sanitized at write time
+ * (whitelisted font ids + validated hex colors) and only ever touch
+ * presentation tokens, never data.
+ */
+function ThemeOverrideStyle({
+  themeId,
+  customization,
+}: {
+  themeId: string;
+  customization: ThemeCustomizationMap[keyof ThemeCustomizationMap];
+}) {
+  if (isEmptyCustomization(customization)) return null;
+  const vars = customizationToCssVars(customization);
+  const mainBlock = cssVarsToBlock(`[data-theme="${themeId}"]`, vars);
+  // Keep the browser's overscroll/rubber-band area in sync with a custom bg.
+  const bg = customization?.colors?.bg;
+  const bodyBlock = bg
+    ? `body:has([data-theme="${themeId}"]) { background-color: ${bg}; }`
+    : "";
+  const css = [mainBlock, bodyBlock].filter(Boolean).join("\n");
+  if (!css) return null;
+  return <style dangerouslySetInnerHTML={{ __html: css }} />;
+}
 
 export default async function StoreLayout({
   children,
@@ -35,6 +68,7 @@ export default async function StoreLayout({
   let contact = { email: "", phone: "", address: "" };
   let config: StoreConfig = DEFAULT_STORE_CONFIG;
   let socialLinks = DEFAULT_FOOTER.socialLinks;
+  let customizations: ThemeCustomizationMap = {};
 
   // Theme system: active theme comes from settings (memoized per request —
   // zero extra queries); an admin live-preview can override presentation via
@@ -54,6 +88,7 @@ export default async function StoreLayout({
     const [cms, store] = await Promise.all([getCmsData(), getStoreSettings()]);
     footerContent = cms.footer;
     newsletterContent = cms.newsletter;
+    customizations = store.themeCustomizations;
     contact = {
       email: store.contactEmail,
       phone: store.contactPhone,
@@ -100,6 +135,14 @@ export default async function StoreLayout({
           data-theme={rendered.id}
           className={preview ? "rd-has-preview min-h-dvh bg-bone text-ink" : "min-h-dvh bg-bone text-ink"}
         >
+          {/* Per-storefront admin overrides (fonts + colors). Server-rendered
+              as a scoped <style> block: zero client JS, zero extra queries —
+              the values ride on the memoized settings read above. Absent keys
+              fall through to the theme's original defaults. */}
+          <ThemeOverrideStyle themeId={rendered.id} customization={customizations[rendered.id]} />
+          {/* Live-preview bridge: exists ONLY inside a validated admin
+              preview session; customers never download it. */}
+          {preview && <PreviewBridge />}
           {preview && (
             <div className="rd-preview-bar">
               <span aria-hidden>◐</span>

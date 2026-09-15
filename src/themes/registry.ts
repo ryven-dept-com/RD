@@ -80,6 +80,18 @@ export const THEMES: ThemeDefinition[] = [
     pdp: "luxury",
     swatch: { bg: "#fbfaf7", surface: "#f1efe9", fg: "#141414", accent: "#141414" },
   },
+  {
+    id: "seventh",
+    name: "BLOCK SEVEN",
+    tagline: "Pop-brutalist drop culture",
+    description:
+      "A streetwear label built like a poster wall: electric cobalt and signal orange on bone, heavyweight grotesque type, chunky 3px frames with hard offset shadows and sticker plates. Loud on purpose, premium in the details.",
+    tags: ["pop", "color-block", "hard shadows", "drop culture", "posters"],
+    hero: "pop",
+    card: "sticker",
+    pdp: "drop",
+    swatch: { bg: "#f2efe6", surface: "#ffffff", fg: "#101014", accent: "#1d3fd6" },
+  },
 ];
 
 /** Default storefront theme when the setting is missing/invalid. */

@@ -20,6 +20,7 @@ export const THEME_IDS = [
   "nightshift",
   "archive",
   "signature",
+  "seventh",
 ] as const;
 
 export type ThemeId = (typeof THEME_IDS)[number];
@@ -31,7 +32,8 @@ export type HeroVariant =
   | "editorial" // DISTRICT: magazine split, campaign image + refined type
   | "immersive" // NIGHT SHIFT: dark cinematic stage with controlled glow
   | "catalog" // ARCHIVE: cream catalog cover with archive labels
-  | "minimal"; // SIGNATURE: vast whitespace, one photograph, whisper type
+  | "minimal" // SIGNATURE: vast whitespace, one photograph, whisper type
+  | "pop"; // BLOCK SEVEN: color-blocked pop stage with hard shadows
 
 /** Product-card archetype (markup + styling hooks). */
 export type CardVariant =
@@ -40,7 +42,8 @@ export type CardVariant =
   | "classic" // balanced grid card (the district baseline)
   | "immersive" // dark stage, glow ring on hover, floating price
   | "catalog" // numbered archive entry with ledger rules
-  | "luxury"; // airy, tiny captions, massive whitespace
+  | "luxury" // airy, tiny captions, massive whitespace
+  | "sticker"; // pop-framed card with offset shadow + sticker plate
 
 /** PDP composition archetype. */
 export type PdpVariant =
@@ -49,7 +52,8 @@ export type PdpVariant =
   | "editorial" // magazine column layout, generous captions
   | "immersive" // dark stage, imagery bleeds, glowing CTA
   | "catalog" // archive plate: framed image + catalog metadata
-  | "luxury"; // centered, vast whitespace, restrained controls
+  | "luxury" // centered, vast whitespace, restrained controls
+  | "drop"; // pop drop-sheet: framed image, chunky plates, loud price
 
 export interface ThemeDefinition {
   id: ThemeId;

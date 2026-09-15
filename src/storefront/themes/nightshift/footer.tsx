@@ -13,7 +13,7 @@ export function NightshiftFooter({ data }: FooterProps) {
     content.showContact && Boolean(contact.email || contact.phone || contact.address);
 
   return (
-    <footer className="rd-dark-panel bg-ink text-bone">
+    <footer className="rd-footer rd-dark-panel bg-ink text-bone">
       <div className="ns-glow-line h-px w-full bg-gradient-to-r from-transparent via-amber to-transparent opacity-60" aria-hidden />
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
         <div className="flex flex-col justify-between gap-10 lg:flex-row">

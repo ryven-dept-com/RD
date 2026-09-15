@@ -1,7 +1,23 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
-import { Anton, Fraunces, Inter, Space_Grotesk } from "next/font/google";
+import {
+  Amiri,
+  Anton,
+  Archivo_Black,
+  Bebas_Neue,
+  Cairo,
+  Fraunces,
+  Inter,
+  Manrope,
+  Noto_Kufi_Arabic,
+  Oswald,
+  Playfair_Display,
+  Space_Grotesk,
+  Syne,
+  Tajawal,
+  Work_Sans,
+} from "next/font/google";
 import { getStoreSettings } from "@/lib/settings";
 import { LanguageProvider } from "@/i18n/language-context";
 import { LOCALE_COOKIE, localeDir, resolveLocale } from "@/i18n/translations";
@@ -33,6 +49,71 @@ const spaceGrotesk = Space_Grotesk({
 const fraunces = Fraunces({
   subsets: ["latin"],
   variable: "--font-fraunces",
+  display: "swap",
+});
+
+/* Customization catalog fonts — admin-selectable typography per storefront.
+   next/font only emits @font-face declarations here; browsers download a
+   font binary only when the active theme (or its overrides) actually
+   renders it, so unused fonts cost a few CSS bytes and nothing more. */
+const archivoBlack = Archivo_Black({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-archivo-black",
+  display: "swap",
+});
+const bebasNeue = Bebas_Neue({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-bebas-neue",
+  display: "swap",
+});
+const oswald = Oswald({
+  subsets: ["latin"],
+  variable: "--font-oswald",
+  display: "swap",
+});
+const syne = Syne({
+  subsets: ["latin"],
+  variable: "--font-syne",
+  display: "swap",
+});
+const playfairDisplay = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-playfair-display",
+  display: "swap",
+});
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-manrope",
+  display: "swap",
+});
+const workSans = Work_Sans({
+  subsets: ["latin"],
+  variable: "--font-work-sans",
+  display: "swap",
+});
+/* Arabic voices — never force a Latin display face onto Arabic script. */
+const cairo = Cairo({
+  subsets: ["arabic"],
+  variable: "--font-cairo",
+  display: "swap",
+});
+const tajawal = Tajawal({
+  subsets: ["arabic"],
+  weight: ["400", "500", "700"],
+  variable: "--font-tajawal",
+  display: "swap",
+});
+const amiri = Amiri({
+  subsets: ["arabic"],
+  weight: ["400", "700"],
+  variable: "--font-amiri",
+  display: "swap",
+});
+const notoKufiArabic = Noto_Kufi_Arabic({
+  subsets: ["arabic"],
+  variable: "--font-noto-kufi-arabic",
   display: "swap",
 });
 
@@ -104,7 +185,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
     <html
       lang={locale}
       dir={localeDir(locale)}
-      className={`${inter.variable} ${anton.variable} ${spaceGrotesk.variable} ${fraunces.variable}`}
+      className={`${inter.variable} ${anton.variable} ${spaceGrotesk.variable} ${fraunces.variable} ${archivoBlack.variable} ${bebasNeue.variable} ${oswald.variable} ${syne.variable} ${playfairDisplay.variable} ${manrope.variable} ${workSans.variable} ${cairo.variable} ${tajawal.variable} ${amiri.variable} ${notoKufiArabic.variable}`}
     >
       <body className="bg-bone text-ink antialiased">
         <LanguageProvider initialLocale={locale}>{children}</LanguageProvider>

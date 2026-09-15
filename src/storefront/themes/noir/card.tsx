@@ -30,7 +30,7 @@ export function NoirCard({
       className="noir-card group block animate-fade-up"
       style={{ animationDelay: `${Math.min(index, 8) * 70}ms` }}
     >
-      <div className="rd-card-img relative aspect-[4/5] overflow-hidden rounded-md bg-brand-100">
+      <div className="rd-card-img rd-card-frame relative aspect-[4/5] overflow-hidden rounded-md bg-brand-100">
         <CardMedia
           images={product.images}
           name={product.name}
@@ -44,14 +44,14 @@ export function NoirCard({
           <p className="noir-card-kicker text-[10px] font-semibold uppercase tracking-[0.35em] text-bone/60">
             {String((index % 99) + 1).padStart(2, "0")} — {product.category}
           </p>
-          <h3 className="mt-1.5 font-display text-2xl uppercase leading-none tracking-tight text-bone sm:text-3xl">
+          <h3 className="rd-card-title mt-1.5 font-display text-2xl uppercase leading-none tracking-tight text-bone sm:text-3xl">
             {product.name}
           </h3>
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between gap-3 px-0.5">
         <span className="h-px w-8 shrink-0 bg-amber" aria-hidden />
-        <span className="text-sm font-semibold tabular-nums tracking-wide">
+        <span className="rd-price text-sm font-semibold tabular-nums tracking-wide">
           {fmt(product.price)}
         </span>
         {onSale ? (

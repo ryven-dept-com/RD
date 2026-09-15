@@ -177,6 +177,7 @@ export function ProductPurchase(props: PurchaseProps) {
     nightshift: { chip: "rounded-md", size: "rounded-md", qty: "rounded-md", cta: "rounded-full" },
     archive: { chip: "rounded-full", size: "rounded-none", qty: "rounded-full", cta: "rounded-full" },
     signature: { chip: "rounded-full", size: "rounded-full", qty: "rounded-full", cta: "rounded-full" },
+    seventh: { chip: "rounded-none border-2", size: "rounded-none border-2", qty: "rounded-none border-2", cta: "rounded-sm" },
   }[theme] ?? { chip: "rounded-full", size: "rounded-lg", qty: "rounded-full", cta: "rounded-full" };
 
   return (

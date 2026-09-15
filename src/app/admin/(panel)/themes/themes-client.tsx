@@ -25,6 +25,7 @@ const PREVIEW_STYLE: Record<
   nightshift: { font: "var(--font-space-grotesk)", transform: "uppercase", tracking: "0.06em", sample: "NIGHT" },
   archive: { font: "var(--font-fraunces)", transform: "none", tracking: "-0.01em", sample: "Archive" },
   signature: { font: "var(--font-fraunces)", transform: "none", tracking: "0.12em", sample: "Signature" },
+  seventh: { font: "var(--font-archivo-black)", transform: "uppercase", tracking: "0", sample: "BLOCK 7" },
 };
 
 /** Pure-CSS mini storefront used as the large visual preview on each card. */
@@ -237,18 +238,24 @@ export function ThemesClient({
                     </span>
                   ))}
                 </div>
-                <div className="mt-4 flex gap-2">
+                <div className="mt-4 grid grid-cols-3 gap-2">
                   <button
                     onClick={() => previewTheme(theme)}
                     disabled={busy !== null}
-                    className="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
                   >
                     {busy === theme.id ? "Working…" : "Preview"}
                   </button>
+                  <a
+                    href={`/admin/themes/${encodeURIComponent(theme.id)}/customize`}
+                    className="rounded-lg border border-slate-300 px-3 py-2.5 text-center text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+                  >
+                    Customize
+                  </a>
                   <button
                     onClick={() => !isActive && setConfirming(theme)}
                     disabled={isActive || busy !== null}
-                    className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+                    className={`rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
                       isActive
                         ? "cursor-default bg-emerald-600 text-white"
                         : "bg-slate-900 text-white hover:bg-slate-700"

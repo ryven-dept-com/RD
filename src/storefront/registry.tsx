@@ -37,6 +37,12 @@ import { SignatureHome } from "./themes/signature/home";
 import { SignaturePdp } from "./themes/signature/pdp";
 import { SignatureShop } from "./themes/signature/shop";
 
+import { SeventhCard } from "./themes/seventh/card";
+import { SeventhFooter } from "./themes/seventh/footer";
+import { SeventhHome } from "./themes/seventh/home";
+import { SeventhPdp } from "./themes/seventh/pdp";
+import { SeventhShop } from "./themes/seventh/shop";
+
 /**
  * Storefront registry — every theme provides a COMPLETE storefront surface
  * (Home / Shop / PDP / Footer / Card). Pages resolve the active theme and
@@ -44,7 +50,7 @@ import { SignatureShop } from "./themes/signature/shop";
  * server-rendered tree, so their client modules are never streamed or
  * downloaded by customers.
  *
- * All six consume the SAME data loaders, business components and APIs —
+ * All seven consume the SAME data loaders, business components and APIs —
  * nothing below the presentation layer knows a theme exists.
  */
 const STOREFRONTS: Record<ThemeId, StorefrontComponents> = {
@@ -89,6 +95,13 @@ const STOREFRONTS: Record<ThemeId, StorefrontComponents> = {
     Pdp: SignaturePdp,
     FooterView: SignatureFooter,
     Card: SignatureCard,
+  },
+  seventh: {
+    Home: SeventhHome,
+    Shop: SeventhShop,
+    Pdp: SeventhPdp,
+    FooterView: SeventhFooter,
+    Card: SeventhCard,
   },
 };
 

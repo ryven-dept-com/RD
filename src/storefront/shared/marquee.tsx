@@ -16,12 +16,12 @@ export function Marquee({
   accent?: string;
 }) {
   return (
-    <div className={`relative flex overflow-hidden ${className}`}>
+    <div className={`rd-ticker relative flex overflow-hidden ${className}`}>
       <div className="animate-marquee flex shrink-0 items-center gap-8 whitespace-nowrap pe-8">
         {[...items, ...items].map((m, i) => (
           <span
             key={i}
-            className="flex items-center gap-8 text-xs font-semibold uppercase tracking-[0.2em]"
+            className="rd-ticker-item flex items-center gap-8 text-xs font-semibold uppercase tracking-[0.2em]"
           >
             {link ? (
               <Link href={link} className="hover:opacity-70">
