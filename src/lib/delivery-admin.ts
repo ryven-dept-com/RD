@@ -136,7 +136,24 @@ export function validateZoneInput(
 // ---------------------------------------------------------------------------
 // Shipping quote — the ONLY place shipping prices are computed. The checkout
 // calls this server-side; clients only ever see the result.
+//
+// Money units (single rule, enforced here):
+//  - delivery_zones.home_price / pickup_price are stored as WHOLE DZD (DA) —
+//    exactly the numbers the Admin Delivery panel shows and edits.
+//  - The free-shipping threshold is a store SETTING in whole DZD (DA).
+//  - Everything handed to the storefront (quote.shipping, public zone method
+//    prices) is INTEGER CENTS, like every other amount in the store
+//    (product prices, subtotals, order totals). The DA → cents conversion
+//    happens only at this boundary.
 // ---------------------------------------------------------------------------
+
+/** Whole-dinar → cents factor (DZD has 100 centimes). */
+export const DZD_TO_CENTS = 100;
+
+/** Convert a whole-dinar delivery price to store cents. */
+export function daToCents(wholeDzd: number): number {
+  return sanitizePrice(wholeDzd) * DZD_TO_CENTS;
+}
 
 export type ShippingQuote = {
   method: ShippingMethod;
@@ -148,35 +165,48 @@ export type ShippingQuote = {
 /**
  * Server-authoritative shipping calculation:
  *  1. the zone must be active and the method enabled for it,
- *  2. shipping = the zone's method price,
- *  3. the Phase 3 free-shipping threshold still applies: subtotal at or
- *     above the threshold ships free (explicit, unchanged rule).
+ *  2. shipping = the zone's configured method price (whole DZD in the DB,
+ *     returned in cents),
+ *  3. the free-shipping threshold still applies: subtotal at or above the
+ *     threshold ships free (explicit store-setting rule). Both sides are
+ *     compared in cents.
+ *
+ * Compute the authoritative shipping fee for a zone + method.
+ *
+ * @param zone            delivery zone row (prices stored in WHOLE DZD)
+ * @param method          "home" | "office"
+ * @param subtotalCents   cart subtotal in INTEGER CENTS (store-wide unit)
+ * @param freeShipThresholdDa  the store setting, in WHOLE DZD
+ *
+ * Production incident fixed here: the threshold used to be compared raw
+ * against the cents subtotal (15000 DA vs 250000 cents), which made EVERY
+ * cart "free" and hid the prices Admin had configured. Both sides are now
+ * normalized to cents before comparing; the configured zone price is
+ * returned as cents so it lands in order totals unchanged.
  */
 export function quoteShipping(
   zone: { enabled: boolean; homeEnabled: boolean; pickupEnabled: boolean; homePrice: number; pickupPrice: number; homeEstimatedTime: string; pickupEstimatedTime: string; estimatedTime: string },
   method: ShippingMethod,
-  subtotal: number,
-  freeShipThreshold: number,
+  subtotalCents: number,
+  freeShipThresholdDa: number,
 ): ShippingQuote | null {
   if (!zone.enabled) return null;
+  const freeThresholdCents = daToCents(freeShipThresholdDa);
+  const free = subtotalCents >= freeThresholdCents;
   if (method === "home") {
     if (!zone.homeEnabled) return null;
-    const base = sanitizePrice(zone.homePrice);
-    const free = subtotal >= freeShipThreshold;
     return {
       method,
-      shipping: free ? 0 : base,
+      shipping: free ? 0 : daToCents(zone.homePrice),
       freeShipping: free,
       estimatedTime: zone.homeEstimatedTime || zone.estimatedTime,
     };
   }
   if (method === "office") {
     if (!zone.pickupEnabled) return null;
-    const base = sanitizePrice(zone.pickupPrice);
-    const free = subtotal >= freeShipThreshold;
     return {
       method,
-      shipping: free ? 0 : base,
+      shipping: free ? 0 : daToCents(zone.pickupPrice),
       freeShipping: free,
       estimatedTime: zone.pickupEstimatedTime || zone.estimatedTime,
     };
@@ -198,16 +228,18 @@ export async function listActiveZonesPublic() {
     .from(deliveryZones)
     .where(eq(deliveryZones.enabled, true))
     .orderBy(asc(deliveryZones.sortOrder), asc(deliveryZones.code));
+  // Prices are exposed to the storefront in CENTS (store-wide unit); the
+  // zone table itself stores whole DZD (what Admin sees and edits).
   return rows.map((z) => ({
     code: z.code,
     wilaya: z.wilaya,
     city: z.city,
     methods: {
       home: z.homeEnabled
-        ? { price: z.homePrice, estimatedTime: z.homeEstimatedTime || z.estimatedTime }
+        ? { price: daToCents(z.homePrice), estimatedTime: z.homeEstimatedTime || z.estimatedTime }
         : null,
       office: z.pickupEnabled
-        ? { price: z.pickupPrice, estimatedTime: z.pickupEstimatedTime || z.estimatedTime }
+        ? { price: daToCents(z.pickupPrice), estimatedTime: z.pickupEstimatedTime || z.estimatedTime }
         : null,
     },
   }));

@@ -270,7 +270,10 @@ export async function POST(request: Request) {
       deliveryZoneName = zone.wilaya;
       deliveryEstimate = quote.estimatedTime;
     } else {
-      shipping = subtotal >= freeShipThreshold ? 0 : SHIPPING_FLAT;
+      // Legacy clients that send no zone: the free-shipping threshold is a
+      // whole-DZD store setting, the subtotal is integer cents — convert
+      // before comparing (a raw comparison made every order "free").
+      shipping = subtotal >= freeShipThreshold * 100 ? 0 : SHIPPING_FLAT;
     }
 
     const total = subtotal + shipping;

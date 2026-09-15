@@ -21,8 +21,11 @@ export function CartDrawer() {
   const { formatPrice, freeShippingThreshold } = useStoreConfig();
   const t = useT();
 
-  const remaining = Math.max(0, freeShippingThreshold - subtotal);
-  const progress = Math.min(100, (subtotal / freeShippingThreshold) * 100);
+  // The threshold setting is whole DZD; the cart subtotal is integer cents
+  // — convert once so the progress bar compares like-for-like amounts.
+  const thresholdCents = freeShippingThreshold * 100;
+  const remaining = Math.max(0, thresholdCents - subtotal);
+  const progress = Math.min(100, thresholdCents > 0 ? (subtotal / thresholdCents) * 100 : 100);
 
   return (
     <div

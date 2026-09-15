@@ -35,7 +35,13 @@ export function ensureSeeded(): Promise<void> {
   return bootstrapPromise;
 }
 
-async function getRatingMap(): Promise<RatingMap> {
+/**
+ * Rating aggregates for every product. Memoized per request: listing pages
+ * combine several card queries (featured / new / CMS lists) plus related
+ * products, and each of them needs this map — within ONE server render it is
+ * fetched once, never per caller.
+ */
+const getRatingMap = memoizePerRequest(async (): Promise<RatingMap> => {
   const rows = await db
     .select({
       productId: reviews.productId,
@@ -53,7 +59,7 @@ async function getRatingMap(): Promise<RatingMap> {
     });
   }
   return map;
-}
+});
 
 export function toCardData(
   p: Product,
@@ -447,70 +453,87 @@ export type ProductDetail = {
   related: ProductCardData[];
 };
 
-export async function getProductBySlug(
-  slug: string,
-): Promise<ProductDetail | null> {
-  try {
-    await ensureSeeded();
-    const [product] = await db
-      .select()
-      .from(products)
-      .where(
-        and(
-          eq(products.slug, slug),
-          eq(products.active, true),
-          eq(products.status, "active"), // Phase 5: drafts/archived are hidden
-        ),
-      )
-      .limit(1);
-    if (!product) return null;
+/**
+ * Full product detail for the PDP.
+ *
+ * Performance contract (mobile navigation):
+ *  - Memoized per request: `generateMetadata` and the page component both
+ *    call this during ONE server render, so the whole chain executes once —
+ *    never twice.
+ *  - After the product row resolves, variants / reviews / related products /
+ *    rating aggregates run IN PARALLEL (one round-trip batch instead of four
+ *    serial ones). On the remote production database this cuts the PDP
+ *    server-render latency that mobile visitors wait on between the tap and
+ *    the page appearing.
+ *  - Still `force-dynamic` at the route level: no cross-request caching, so
+ *    admin product edits are visible on the very next render.
+ */
+export const getProductBySlug = memoizePerRequest(
+  async (slug: string): Promise<ProductDetail | null> => {
+    try {
+      await ensureSeeded();
+      const [product] = await db
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.slug, slug),
+            eq(products.active, true),
+            eq(products.status, "active"), // Phase 5: drafts/archived are hidden
+          ),
+        )
+        .limit(1);
+      if (!product) return null;
 
-    const variants = await getProductVariants(product.id);
+      const [variants, productReviews, relatedRows, ratingMap] =
+        await Promise.all([
+          getProductVariants(product.id),
+          db
+            .select()
+            .from(reviews)
+            .where(eq(reviews.productId, product.id))
+            .orderBy(desc(reviews.createdAt)),
+          db
+            .select()
+            .from(products)
+            .where(
+              and(
+                eq(products.category, product.category),
+                eq(products.active, true),
+                eq(products.status, "active"),
+              ),
+            )
+            .limit(5),
+          getRatingMap(),
+        ]);
 
-    const productReviews = await db
-      .select()
-      .from(reviews)
-      .where(eq(reviews.productId, product.id))
-      .orderBy(desc(reviews.createdAt));
+      const avgRating = productReviews.length
+        ? Math.round(
+            (productReviews.reduce((a, r) => a + r.rating, 0) /
+              productReviews.length) *
+              10,
+          ) / 10
+        : 0;
 
-    const avgRating = productReviews.length
-      ? Math.round(
-          (productReviews.reduce((a, r) => a + r.rating, 0) /
-            productReviews.length) *
-            10,
-        ) / 10
-      : 0;
+      const related = relatedRows
+        .filter((p) => p.id !== product.id)
+        .slice(0, 4)
+        .map((p) => toCardData(p, ratingMap.get(p.id)));
 
-    const relatedRows = await db
-      .select()
-      .from(products)
-      .where(
-        and(
-          eq(products.category, product.category),
-          eq(products.active, true),
-          eq(products.status, "active"),
-        ),
-      )
-      .limit(5);
-    const ratingMap = await getRatingMap();
-    const related = relatedRows
-      .filter((p) => p.id !== product.id)
-      .slice(0, 4)
-      .map((p) => toCardData(p, ratingMap.get(p.id)));
-
-    return {
-      product,
-      variants,
-      reviews: productReviews,
-      avgRating,
-      reviewCount: productReviews.length,
-      related,
-    };
-  } catch (err) {
-    console.error("getProductBySlug failed:", err);
-    return null;
-  }
-}
+      return {
+        product,
+        variants,
+        reviews: productReviews,
+        avgRating,
+        reviewCount: productReviews.length,
+        related,
+      };
+    } catch (err) {
+      console.error("getProductBySlug failed:", err);
+      return null;
+    }
+  },
+);
 
 export async function getAllSlugs(): Promise<string[]> {
   try {

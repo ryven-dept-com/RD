@@ -1562,8 +1562,10 @@ async function main() {
   );
 
   // 13.0c Exhaustive table verification — every wilaya against the
-  // business-provided delivery table (values in DA; stored/compared in
-  // cents). `null` = method not offered; both null = zone disabled.
+  // business-provided delivery table. Zone prices are stored as WHOLE DZD
+  // (the admin list exposes the stored values, so we compare raw DA here;
+  // the public storefront endpoints convert to cents at their boundary).
+  // `null` = method not offered; both null = zone disabled.
   const OFFICIAL = {
     1: [1100, 600], 2: [700, 400], 3: [900, 500], 4: [650, 400], 5: [700, 500],
     6: [700, 400], 7: [900, 500], 8: [1100, 600], 9: [500, 250], 10: [700, 400],
@@ -1588,8 +1590,9 @@ async function main() {
     if (!z) { mismatches.push(`${code}:missing`); continue; }
     if ((z.homeEnabled === true) !== (home !== null)) mismatches.push(`${code}:homeEnabled`);
     if ((z.pickupEnabled === true) !== (stop !== null)) mismatches.push(`${code}:pickupEnabled`);
-    if (home !== null && z.homePrice !== home * 100) mismatches.push(`${code}:homePrice=${z.homePrice}`);
-    if (stop !== null && z.pickupPrice !== stop * 100) mismatches.push(`${code}:pickupPrice=${z.pickupPrice}`);
+    // Admin exposes the STORED value (whole DZD) — compare raw DA.
+    if (home !== null && z.homePrice !== home) mismatches.push(`${code}:homePrice=${z.homePrice}`);
+    if (stop !== null && z.pickupPrice !== stop) mismatches.push(`${code}:pickupPrice=${z.pickupPrice}`);
     if (home === null && stop === null && z.enabled !== false) mismatches.push(`${code}:enabled`);
   }
   check(
@@ -1703,28 +1706,126 @@ async function main() {
   const publicZones = await jfetch(`${BASE}/api/delivery/zones`).then((r) => r.json());
   const pubAlgiers = publicZones.zones?.find((z) => z.code === 16);
   check(
-    "public zones expose per-method prices for active zones",
+    "public zones expose per-method prices in CENTS (600/350 DA configured)",
     publicZones.ok === true &&
-      pubAlgiers?.methods.home?.price === 600 &&
-      pubAlgiers?.methods.office?.price === 350,
+      pubAlgiers?.methods.home?.price === 60000 &&
+      pubAlgiers?.methods.office?.price === 35000,
     JSON.stringify(pubAlgiers),
   );
   const quoteHome = await jfetch(
     `${BASE}/api/delivery/quote?zone=16&method=home&subtotal=5000`,
   ).then((r) => r.json());
   check(
-    "quote below threshold uses zone price",
-    quoteHome.ok === true && quoteHome.quote.shipping === 600 && !quoteHome.quote.freeShipping,
+    "quote below threshold returns the configured price in cents",
+    quoteHome.ok === true && quoteHome.quote.shipping === 60000 && !quoteHome.quote.freeShipping,
   );
-  const quoteFree = await jfetch(
-    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=15000`,
+  // PRODUCTION-INCIDENT REGRESSION: a realistic 2,500 DA cart (250,000
+  // cents) must NOT quote free just because 250,000 > 15,000 (the DZD
+  // threshold). Configured prices must be charged.
+  const quoteIncidentHome = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=home&subtotal=250000`,
+  ).then((r) => r.json());
+  const quoteIncidentOffice = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=250000`,
   ).then((r) => r.json());
   check(
-    "free-shipping threshold still applies at/above 15000",
+    "incident regression: 2,500 DA cart quotes real home price, not Free",
+    quoteIncidentHome.ok === true &&
+      quoteIncidentHome.quote.shipping === 60000 &&
+      quoteIncidentHome.quote.freeShipping === false,
+    JSON.stringify(quoteIncidentHome),
+  );
+  check(
+    "incident regression: 2,500 DA cart quotes real office price, not Free",
+    quoteIncidentOffice.ok === true &&
+      quoteIncidentOffice.quote.shipping === 35000 &&
+      quoteIncidentOffice.quote.freeShipping === false,
+    JSON.stringify(quoteIncidentOffice),
+  );
+  const quoteFree = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=1500000`,
+  ).then((r) => r.json());
+  check(
+    "free-shipping threshold applies at/above 15,000 DA (1,500,000 cents)",
     quoteFree.ok === true &&
       quoteFree.quote.shipping === 0 &&
       quoteFree.quote.freeShipping === true,
   );
+  const quoteNotFreeJustBelow = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=1499999`,
+  ).then((r) => r.json());
+  check(
+    "one centime below the threshold still pays the configured price",
+    quoteNotFreeJustBelow.ok === true &&
+      quoteNotFreeJustBelow.quote.shipping === 35000 &&
+      quoteNotFreeJustBelow.quote.freeShipping === false,
+  );
+
+  // SCREENSHOT SCENARIO (requirement #11): Admin has Home = 500 DA and
+  // Stop desk/bureau = 250 DA configured. The storefront must charge those
+  // exact amounts (50,000 / 25,000 cents) — never "Free" — for a normal
+  // 2,500 DA cart, and the configured values must round-trip through the
+  // admin panel unchanged (whole DZD in, whole DZD out).
+  await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      wilaya: algiers.wilaya,
+      homeEnabled: true,
+      homePrice: 500,
+      pickupEnabled: true,
+      pickupPrice: 250,
+    }),
+  });
+  const screenshotZones = await jfetch(`${BASE}/api/delivery/zones`).then((r) => r.json());
+  const screenshotAlgiers = screenshotZones.zones?.find((z) => z.code === 16);
+  check(
+    "screenshot scenario: 500/250 DA exposed to storefront as 50,000/25,000 cents",
+    screenshotAlgiers?.methods.home?.price === 50000 &&
+      screenshotAlgiers?.methods.office?.price === 25000,
+    JSON.stringify(screenshotAlgiers),
+  );
+  const screenshotHome = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=home&subtotal=250000`,
+  ).then((r) => r.json());
+  const screenshotOffice = await jfetch(
+    `${BASE}/api/delivery/quote?zone=16&method=office&subtotal=250000`,
+  ).then((r) => r.json());
+  check(
+    "screenshot scenario: storefront quotes 500 DA home (NOT Free)",
+    screenshotHome.ok === true &&
+      screenshotHome.quote.shipping === 50000 &&
+      screenshotHome.quote.freeShipping === false,
+    JSON.stringify(screenshotHome),
+  );
+  check(
+    "screenshot scenario: storefront quotes 250 DA stop desk (NOT Free)",
+    screenshotOffice.ok === true &&
+      screenshotOffice.quote.shipping === 25000 &&
+      screenshotOffice.quote.freeShipping === false,
+    JSON.stringify(screenshotOffice),
+  );
+  // Admin round-trip: the panel still reads back the whole-DZD values.
+  const screenshotAdmin = await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  check(
+    "screenshot scenario: admin reads back 500/250 whole DZD as entered",
+    screenshotAdmin.zone?.homePrice === 500 && screenshotAdmin.zone?.pickupPrice === 250,
+    JSON.stringify({ home: screenshotAdmin.zone?.homePrice, pickup: screenshotAdmin.zone?.pickupPrice }),
+  );
+  // Restore 600/350 for the checkout assertions that follow.
+  await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
+    method: "PATCH",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      wilaya: algiers.wilaya,
+      homeEnabled: true,
+      homePrice: 600,
+      pickupEnabled: true,
+      pickupPrice: 350,
+    }),
+  });
   const quoteBadMethod = await jfetch(
     `${BASE}/api/delivery/quote?zone=16&method=drone&subtotal=1000`,
   );
@@ -1796,13 +1897,13 @@ async function main() {
     }),
   }).then((r) => r.json());
   check(
-    "checkout with home delivery succeeds",
-    homeBuy.ok === true && homeBuy.shipping === 600,
+    "checkout with home delivery succeeds (600 DA charged as 60,000 cents)",
+    homeBuy.ok === true && homeBuy.shipping === 60000,
     JSON.stringify(homeBuy),
   );
   check(
     "client-manipulated shipping price ignored (server is source of truth)",
-    homeBuy.total === homeBuy.subtotal + 600,
+    homeBuy.total === homeBuy.subtotal + 60000,
   );
   const homeOrder = await jfetch(
     `${BASE}/api/admin/orders?q=${encodeURIComponent(homeBuy.orderNumber)}`,
@@ -1819,7 +1920,7 @@ async function main() {
       homeDetail.order.deliveryEstimate === "1-2 أيام" &&
       homeDetail.order.wilaya.includes("الجزائر") &&
       homeDetail.order.commune === "Bab El Oued" &&
-      homeDetail.order.shipping === 600,
+      homeDetail.order.shipping === 60000,
     JSON.stringify({
       m: homeDetail.order.deliveryMethod,
       z: homeDetail.order.deliveryZoneCode,
@@ -1838,7 +1939,7 @@ async function main() {
   }).then((r) => r.json());
   check(
     "historical shipping snapshot unaffected by later price changes",
-    homeDetailAfter.order.shipping === 600 && homeDetailAfter.order.total === homeBuy.total,
+    homeDetailAfter.order.shipping === 60000 && homeDetailAfter.order.total === homeBuy.total,
   );
   // restore price for following assertions
   await jfetch(`${BASE}/api/admin/delivery/${algiersId}`, {
@@ -1859,13 +1960,36 @@ async function main() {
     }),
   }).then((r) => r.json());
   check(
-    "checkout with pickup/office delivery uses office price",
-    officeBuy.ok === true && officeBuy.shipping === 350,
+    "checkout with pickup/office delivery uses office price (350 DA as 35,000 cents)",
+    officeBuy.ok === true && officeBuy.shipping === 35000,
     JSON.stringify(officeBuy),
   );
 
-  // Free shipping over the threshold (zone selected).
-  const bigItem = { ...p8Item, quantity: 10 }; // 10 × 8000 = 80000 ≥ 15000
+  // Free shipping over the threshold (zone selected). The threshold is a
+  // whole-DZD store setting (15,000 DA = 1,500,000 cents), so the cart must
+  // genuinely exceed it. Create a high-ticket product for this one order.
+  const FREE_SLUG = "phase8-free-ship-jacket";
+  const freeProd = await jfetch(`${BASE}/api/admin/products`, {
+    method: "POST",
+    headers: adminHeaders,
+    body: JSON.stringify({
+      name: "Phase8 Free Ship Jacket",
+      slug: FREE_SLUG,
+      sku: "P8-JACKET",
+      description: "High-ticket item used to cross the free-shipping threshold.",
+      price: "16000.00", // 1,600,000 cents ≥ 1,500,000 threshold
+      category: "Jackets",
+      sizes: "L",
+      colors: "Sand",
+      variants: [
+        { size: "L", color: "Sand", sku: "P8-L-SAND", stock: 5, active: true },
+      ],
+    }),
+  }).then((r) => r.json());
+  const freeDetail = await jfetch(`${BASE}/api/admin/products/${freeProd.id}`, {
+    headers: adminHeaders,
+  }).then((r) => r.json());
+  const freeVariant = freeDetail.variants.find((v) => v.size === "L");
   const freeBuy = await jfetch(`${BASE}/api/checkout`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1873,12 +1997,31 @@ async function main() {
       ...p8Customer,
       deliveryZone: 16,
       deliveryMethod: "home",
-      items: [bigItem],
+      items: [
+        { slug: FREE_SLUG, size: "L", color: "Sand", quantity: 1, variantId: freeVariant.id, sku: "P8-L-SAND" },
+      ],
     }),
   }).then((r) => r.json());
   check(
-    "free shipping applies at/above threshold even with a zone",
+    "free shipping applies at/above the DZD threshold even with a zone",
     freeBuy.ok === true && freeBuy.shipping === 0 && freeBuy.total === freeBuy.subtotal,
+    JSON.stringify({ subtotal: freeBuy.subtotal, shipping: freeBuy.shipping }),
+  );
+  // And just BELOW the threshold the configured zone price is charged again.
+  const belowFreeBuy = await jfetch(`${BASE}/api/checkout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...p8Customer,
+      deliveryZone: 16,
+      deliveryMethod: "home",
+      items: [p8Item], // 8,000 cents = 80 DA << 15,000 DA
+    }),
+  }).then((r) => r.json());
+  check(
+    "order below the threshold pays the configured zone price (no silent Free)",
+    belowFreeBuy.ok === true && belowFreeBuy.shipping === 60000,
+    JSON.stringify({ subtotal: belowFreeBuy.subtotal, shipping: belowFreeBuy.shipping }),
   );
 
   // Rejections: unavailable method, inactive zone, unknown zone.

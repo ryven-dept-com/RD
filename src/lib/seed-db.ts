@@ -658,11 +658,12 @@ function hashPassword(password: string): string {
   return `scrypt$${salt}$${derived}`;
 }
 
-// Official wilaya delivery price list (business-mandated). Prices are in
-// DA; the store keeps every monetary amount in cents, so values are stored
-// ×100. `null` means the shipping method is not offered for that wilaya;
-// wilayas with no price for either method are seeded as fully disabled.
-// Tuple: [code, Arabic name, à domicile DA|null, STOP DESK DA|null].
+// Official wilaya delivery price list (business-mandated). Prices are WHOLE
+// DZD (DA) and are stored exactly as listed — the Admin panel shows/edits
+// the same numbers, and the storefront converts to cents at the quote
+// boundary. `null` means the shipping method is not offered for that
+// wilaya; wilayas with no price for either method are seeded as fully
+// disabled. Tuple: [code, Arabic name, à domicile DA|null, STOP DESK DA|null].
 const WILAYAS: [number, string, number | null, number | null][] = [
   [1, "أدرار", 1100, 600], [2, "الشلف", 700, 400], [3, "الأغواط", 900, 500],
   [4, "أم البواقي", 650, 400], [5, "باتنة", 700, 500], [6, "بجاية", 700, 400],
@@ -765,15 +766,20 @@ export async function ensureAdminDeviceOwnership(db: SeedDb): Promise<void> {
 /** app_meta marker: the one-time official pricing sync already ran. */
 export const DELIVERY_PRICING_SYNC_KEY = "deliveryPricing.official.v1";
 
-/** Build an insertable delivery-zone row from the official price table. */
+/**
+ * Build an insertable delivery-zone row from the official price table.
+ * Zone prices are stored as WHOLE DZD (DA) — the exact numbers the Admin
+ * Delivery panel displays and edits; the storefront converts to cents at
+ * the quote boundary (see delivery-admin.ts).
+ */
 function zoneValuesFromOfficial(
   code: number,
   wilaya: string,
   homeDa: number | null,
   pickupDa: number | null,
 ) {
-  const homePrice = homeDa === null ? 0 : homeDa * 100;
-  const pickupPrice = pickupDa === null ? 0 : pickupDa * 100;
+  const homePrice = homeDa === null ? 0 : homeDa;
+  const pickupPrice = pickupDa === null ? 0 : pickupDa;
   return {
     code,
     wilaya: `${code} - ${wilaya}`,
@@ -834,6 +840,48 @@ export async function syncOfficialDeliveryPricing(db: SeedDb): Promise<void> {
     JSON.stringify({ at: new Date().toISOString(), wilayas: WILAYAS.length }),
   );
   console.log(`[bootstrap] official delivery pricing synced (${WILAYAS.length} wilayas).`);
+}
+
+/** app_meta marker: the one-time zone-price unit normalization already ran. */
+export const DELIVERY_UNITS_NORMALIZED_KEY = "deliveryPricing.unitsNormalized.v1";
+
+/**
+ * One-time unit normalization for delivery zone prices.
+ *
+ * History: an earlier revision of the official sync stored zone prices as
+ * CENTS (value × 100) while the Admin Delivery panel always displayed and
+ * accepted WHOLE DZD. Databases that ran that revision therefore carry
+ * prices 100× larger than what Admin shows and than what customers must be
+ * charged. The canonical stored unit is WHOLE DZD (matching the Admin
+ * panel). Any stored price >= 10,000 can only be a legacy cents artifact —
+ * the most expensive official home delivery is 1,300 DA, and no real
+ * courier price in this store approaches 10,000 DA — so those values are
+ * divided by 100 exactly once to restore the intended price. Values below
+ * the cutoff are already whole DZD and are left untouched. Marker-gated,
+ * idempotent, never reruns.
+ */
+export async function normalizeDeliveryZoneUnits(db: SeedDb): Promise<void> {
+  const done = await getAppMeta(db, DELIVERY_UNITS_NORMALIZED_KEY);
+  if (done) return;
+
+  const result = await db.execute(sql`
+    UPDATE "delivery_zones"
+    SET
+      "home_price"   = CASE WHEN "home_price"   >= 10000 THEN "home_price"   / 100 ELSE "home_price"   END,
+      "pickup_price" = CASE WHEN "pickup_price" >= 10000 THEN "pickup_price" / 100 ELSE "pickup_price" END,
+      "price"        = CASE WHEN "price"        >= 10000 THEN "price"        / 100 ELSE "price"        END
+    WHERE "home_price" >= 10000 OR "pickup_price" >= 10000 OR "price" >= 10000
+  `);
+  await setAppMeta(
+    db,
+    DELIVERY_UNITS_NORMALIZED_KEY,
+    JSON.stringify({ at: new Date().toISOString() }),
+  );
+  console.log(
+    `[bootstrap] delivery zone price units normalized to whole DZD (rows touched: ${
+      (result as { rowCount?: number | null }).rowCount ?? "?"
+    }).`,
+  );
 }
 
 const DEFAULT_SETTINGS: Record<string, string> = {
@@ -981,6 +1029,12 @@ export async function bootstrapIfNeeded(db: SeedDb): Promise<void> {
   // this runs; it applies the business-mandated wilaya price table exactly
   // once (idempotent marker in app_meta) and never again.
   await syncOfficialDeliveryPricing(db);
+
+  // ---- One-time zone price unit normalization ---------------------------
+  // Repairs databases where an older sync stored zone prices as cents
+  // (×100): canonical storage is whole DZD, matching what the Admin
+  // Delivery panel shows and edits. Idempotent, marker-gated.
+  await normalizeDeliveryZoneUnits(db);
 
   // ---- One-time catalogue initialization -------------------------------
   // The demo catalogue is seeded exactly once per database, ever — recorded

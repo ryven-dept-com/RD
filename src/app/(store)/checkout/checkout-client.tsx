@@ -17,6 +17,15 @@ import { useT } from "@/i18n/language-context";
 
 const SHIPPING_FLAT = 995;
 
+/**
+ * The free-shipping threshold is a store SETTING expressed in WHOLE DZD
+ * (the number the admin enters, e.g. 15000 = 15,000 DA). Every amount in
+ * the cart/order pipeline (subtotal, shipping, totals) is INTEGER CENTS,
+ * so the threshold is converted once here and all comparisons use cents.
+ * Comparing DZD against cents directly made every cart look "free".
+ */
+const DZD_TO_CENTS = 100;
+
 type Confirmation = {
   orderNumber: string;
   total: number;
@@ -129,9 +138,12 @@ export function CheckoutClient() {
   const quote = quoteResult?.key === quoteKey ? quoteResult.quote : null;
   const effectiveQuote = deliveryZone ? quote : null;
 
+  // Cents-based threshold for comparison against the cents subtotal.
+  const freeShippingThresholdCents = freeShippingThreshold * DZD_TO_CENTS;
+
   const shipping = effectiveQuote
     ? effectiveQuote.shipping
-    : subtotal >= freeShippingThreshold
+    : subtotal >= freeShippingThresholdCents
       ? 0
       : SHIPPING_FLAT;
   const total = subtotal + shipping;
@@ -432,7 +444,10 @@ export function CheckoutClient() {
                   {(["home", "office"] as const).map((m) => {
                     const info = selectedZone.methods[m];
                     const selected = deliveryMethod === m;
-                    const free = subtotal >= freeShippingThreshold;
+                    // Show the zone's configured price; only a cart that has
+                    // actually reached the (cents-converted) free threshold
+                    // may display "Free".
+                    const free = subtotal >= freeShippingThresholdCents;
                     // Method not offered in this wilaya: keep it visible but
                     // clearly unselectable so the customer understands why.
                     if (!info) {
@@ -651,7 +666,7 @@ export function CheckoutClient() {
               {!deliveryZone && shipping > 0 && (
                 <p className="mt-3 text-xs text-black/40">
                   {t("checkout.freeShipNote", {
-                    amount: formatPrice(freeShippingThreshold),
+                    amount: formatPrice(freeShippingThresholdCents),
                   })}
                 </p>
               )}

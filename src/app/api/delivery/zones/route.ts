@@ -11,16 +11,18 @@ export const dynamic = "force-dynamic";
  */
 export async function GET() {
   try {
-    let freeShippingThreshold = 15000;
+    // The setting is stored in whole DZD; the public API only ever emits
+    // INTEGER CENTS so no client can mix the units up.
+    let freeShippingThresholdCents = 15000 * 100;
     try {
       const store = await getStoreSettings();
-      freeShippingThreshold = store.freeShippingThreshold;
+      freeShippingThresholdCents = store.freeShippingThreshold * 100;
     } catch {
       // settings unavailable — keep the safe default
     }
     const zones = await listActiveZonesPublic();
     return Response.json(
-      { ok: true, zones, freeShippingThreshold },
+      { ok: true, zones, freeShippingThreshold: freeShippingThresholdCents },
       {
         headers: {
           // Shipping configuration is public read data; checkout still

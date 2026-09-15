@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DELIVERY_TRANSITIONS,
+  daToCents,
   isKnownDeliveryStatus,
   isShippingMethod,
   isTerminalDeliveryStatus,
@@ -22,40 +23,67 @@ const ZONE = {
   estimatedTime: "2-4 أيام",
 };
 
+// Money units under test:
+//  - zone prices (homePrice/pickupPrice) are WHOLE DZD, as stored in the
+//    delivery_zones table and edited in the Admin Delivery panel;
+//  - subtotals are INTEGER CENTS (the store-wide unit);
+//  - the free-shipping threshold is a store SETTING in whole DZD;
+//  - quoteShipping returns the fee in CENTS.
 describe("shipping quote (server-side calculation)", () => {
   it("uses the zone's home price below the free-shipping threshold", () => {
-    const q = quoteShipping(ZONE, "home", 5000, 15000);
+    // 700 DA configured -> 70,000 cents quoted for a 50 DA (5,000 cents) cart.
+    const q = quoteShipping(ZONE, "home", 5_000, 15_000);
     expect(q).toEqual({
       method: "home",
-      shipping: 700,
+      shipping: 70_000,
       freeShipping: false,
       estimatedTime: "2-4 أيام",
     });
   });
 
   it("uses the zone's office price for pickup", () => {
-    const q = quoteShipping(ZONE, "office", 5000, 15000);
-    expect(q?.shipping).toBe(450);
+    const q = quoteShipping(ZONE, "office", 5_000, 15_000);
+    expect(q?.shipping).toBe(45_000);
     expect(q?.estimatedTime).toBe("1-3 أيام");
   });
 
   it("applies the free-shipping threshold at exactly the threshold", () => {
-    const q = quoteShipping(ZONE, "home", 15000, 15000);
+    // Threshold 15,000 DA = 1,500,000 cents.
+    const q = quoteShipping(ZONE, "home", 1_500_000, 15_000);
     expect(q?.shipping).toBe(0);
     expect(q?.freeShipping).toBe(true);
   });
 
+  it("does NOT ship free just below the threshold", () => {
+    const q = quoteShipping(ZONE, "home", 1_499_999, 15_000);
+    expect(q?.shipping).toBe(70_000);
+    expect(q?.freeShipping).toBe(false);
+  });
+
+  it("production incident: a realistic 2,500 DA cart is not free (regression)", () => {
+    // Algiers-style zone configured at 500 DA home / 250 DA stop desk.
+    // The old code compared 250,000 (cents) >= 15,000 (DZD) -> always free,
+    // hiding the configured prices. The quote must now return them in cents.
+    const algiers = { ...ZONE, homePrice: 500, pickupPrice: 250 };
+    const home = quoteShipping(algiers, "home", 250_000, 15_000);
+    const office = quoteShipping(algiers, "office", 250_000, 15_000);
+    expect(home?.shipping).toBe(50_000);
+    expect(home?.freeShipping).toBe(false);
+    expect(office?.shipping).toBe(25_000);
+    expect(office?.freeShipping).toBe(false);
+  });
+
   it("rejects inactive zones", () => {
-    expect(quoteShipping({ ...ZONE, enabled: false }, "home", 100, 15000)).toBeNull();
+    expect(quoteShipping({ ...ZONE, enabled: false }, "home", 10_000, 15_000)).toBeNull();
   });
 
   it("rejects disabled methods", () => {
-    expect(quoteShipping({ ...ZONE, homeEnabled: false }, "home", 100, 15000)).toBeNull();
-    expect(quoteShipping({ ...ZONE, pickupEnabled: false }, "office", 100, 15000)).toBeNull();
+    expect(quoteShipping({ ...ZONE, homeEnabled: false }, "home", 10_000, 15_000)).toBeNull();
+    expect(quoteShipping({ ...ZONE, pickupEnabled: false }, "office", 10_000, 15_000)).toBeNull();
   });
 
   it("falls back to the legacy estimate when a method estimate is empty", () => {
-    const q = quoteShipping({ ...ZONE, homeEstimatedTime: "" }, "home", 100, 15000);
+    const q = quoteShipping({ ...ZONE, homeEstimatedTime: "" }, "home", 10_000, 15_000);
     expect(q?.estimatedTime).toBe("2-4 أيام");
   });
 });
@@ -108,6 +136,15 @@ describe("zone validation", () => {
     expect(sanitizePrice(12.9)).toBe(12);
     expect(sanitizePrice("650")).toBe(650);
     expect(sanitizePrice(undefined, 7)).toBe(7);
+  });
+
+  it("converts whole-dinar zone prices to store cents exactly", () => {
+    expect(daToCents(500)).toBe(50_000);
+    expect(daToCents(250)).toBe(25_000);
+    expect(daToCents(0)).toBe(0);
+    // Never a negative or fractional-cent surprise.
+    expect(daToCents(-3)).toBe(0);
+    expect(daToCents(12.9)).toBe(1_200);
   });
 
   it("never accepts negative prices through zone validation", () => {
